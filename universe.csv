@@ -1,0 +1,245 @@
+ticker,name,country,sector,asset_class
+AAPL,Apple,United States,Technology,Equity
+MSFT,Microsoft,United States,Technology,Equity
+NVDA,Nvidia,United States,Technology,Equity
+AMZN,Amazon,United States,Consumer,Equity
+GOOGL,Alphabet,United States,Communication,Equity
+META,Meta Platforms,United States,Communication,Equity
+TSLA,Tesla,United States,Consumer,Equity
+BRK-B,Berkshire Hathaway,United States,Financials,Equity
+JPM,JPMorgan Chase,United States,Financials,Equity
+V,Visa,United States,Financials,Equity
+MA,Mastercard,United States,Financials,Equity
+JNJ,Johnson & Johnson,United States,Healthcare,Equity
+UNH,UnitedHealth,United States,Healthcare,Equity
+LLY,Eli Lilly,United States,Healthcare,Equity
+XOM,Exxon Mobil,United States,Energy,Equity
+CVX,Chevron,United States,Energy,Equity
+WMT,Walmart,United States,Consumer,Equity
+PG,Procter & Gamble,United States,Consumer,Equity
+KO,Coca-Cola,United States,Consumer,Equity
+PEP,PepsiCo,United States,Consumer,Equity
+HD,Home Depot,United States,Consumer,Equity
+COST,Costco,United States,Consumer,Equity
+MCD,McDonald's,United States,Consumer,Equity
+NKE,Nike,United States,Consumer,Equity
+DIS,Walt Disney,United States,Communication,Equity
+NFLX,Netflix,United States,Communication,Equity
+AMD,AMD,United States,Technology,Equity
+INTC,Intel,United States,Technology,Equity
+CSCO,Cisco,United States,Technology,Equity
+ORCL,Oracle,United States,Technology,Equity
+CRM,Salesforce,United States,Technology,Equity
+ADBE,Adobe,United States,Technology,Equity
+AVGO,Broadcom,United States,Technology,Equity
+QCOM,Qualcomm,United States,Technology,Equity
+TXN,Texas Instruments,United States,Technology,Equity
+PFE,Pfizer,United States,Healthcare,Equity
+MRK,Merck,United States,Healthcare,Equity
+ABBV,AbbVie,United States,Healthcare,Equity
+BAC,Bank of America,United States,Financials,Equity
+GS,Goldman Sachs,United States,Financials,Equity
+MS,Morgan Stanley,United States,Financials,Equity
+CAT,Caterpillar,United States,Industrials,Equity
+BA,Boeing,United States,Industrials,Equity
+GE,GE Aerospace,United States,Industrials,Equity
+HON,Honeywell,United States,Industrials,Equity
+UPS,UPS,United States,Industrials,Equity
+T,AT&T,United States,Communication,Equity
+VZ,Verizon,United States,Communication,Equity
+NEE,NextEra Energy,United States,Utilities,Equity
+LIN,Linde,United States,Materials,Equity
+VOLV-B.ST,Volvo,Sweden,Industrials,Equity
+ERIC-B.ST,Ericsson,Sweden,Technology,Equity
+INVE-B.ST,Investor AB,Sweden,Financials,Equity
+HM-B.ST,H&M,Sweden,Consumer,Equity
+SEB-A.ST,SEB,Sweden,Financials,Equity
+SWED-A.ST,Swedbank,Sweden,Financials,Equity
+SHB-A.ST,Handelsbanken,Sweden,Financials,Equity
+ATCO-A.ST,Atlas Copco,Sweden,Industrials,Equity
+ASSA-B.ST,Assa Abloy,Sweden,Industrials,Equity
+SAND.ST,Sandvik,Sweden,Industrials,Equity
+SKF-B.ST,SKF,Sweden,Industrials,Equity
+ALFA.ST,Alfa Laval,Sweden,Industrials,Equity
+TELIA.ST,Telia,Sweden,Communication,Equity
+EVO.ST,Evolution,Sweden,Consumer,Equity
+EQT.ST,EQT,Sweden,Financials,Equity
+ESSITY-B.ST,Essity,Sweden,Consumer,Equity
+SCA-B.ST,SCA,Sweden,Materials,Equity
+BOL.ST,Boliden,Sweden,Materials,Equity
+HEXA-B.ST,Hexagon,Sweden,Technology,Equity
+EPI-A.ST,Epiroc,Sweden,Industrials,Equity
+SINCH.ST,Sinch,Sweden,Technology,Equity
+NIBE-B.ST,NIBE,Sweden,Industrials,Equity
+ELUX-B.ST,Electrolux,Sweden,Consumer,Equity
+GETI-B.ST,Getinge,Sweden,Healthcare,Equity
+AZN.ST,AstraZeneca (Stockholm),Sweden,Healthcare,Equity
+KINV-B.ST,Kinnevik,Sweden,Financials,Equity
+SAAB-B.ST,Saab,Sweden,Industrials,Equity
+TEL2-B.ST,Tele2,Sweden,Communication,Equity
+BALD-B.ST,Balder,Sweden,Real Estate,Equity
+CAST.ST,Castellum,Sweden,Real Estate,Equity
+FABG.ST,Fabege,Sweden,Real Estate,Equity
+HUSQ-B.ST,Husqvarna,Sweden,Consumer,Equity
+TREL-B.ST,Trelleborg,Sweden,Industrials,Equity
+LIFCO-B.ST,Lifco,Sweden,Industrials,Equity
+AAK.ST,AAK,Sweden,Consumer,Equity
+NOVO-B.CO,Novo Nordisk,Denmark,Healthcare,Equity
+MAERSK-B.CO,Maersk,Denmark,Industrials,Equity
+DSV.CO,DSV,Denmark,Industrials,Equity
+ORSTED.CO,Orsted,Denmark,Utilities,Equity
+CARL-B.CO,Carlsberg,Denmark,Consumer,Equity
+VWS.CO,Vestas Wind,Denmark,Industrials,Equity
+GN.CO,GN Store Nord,Denmark,Healthcare,Equity
+PNDORA.CO,Pandora,Denmark,Consumer,Equity
+COLO-B.CO,Coloplast,Denmark,Healthcare,Equity
+EQNR.OL,Equinor,Norway,Energy,Equity
+DNB.OL,DNB Bank,Norway,Financials,Equity
+TEL.OL,Telenor,Norway,Communication,Equity
+YAR.OL,Yara,Norway,Materials,Equity
+NHY.OL,Norsk Hydro,Norway,Materials,Equity
+MOWI.OL,Mowi,Norway,Consumer,Equity
+AKRBP.OL,Aker BP,Norway,Energy,Equity
+ORK.OL,Orkla,Norway,Consumer,Equity
+KOG.OL,Kongsberg,Norway,Industrials,Equity
+NOKIA.HE,Nokia,Finland,Technology,Equity
+SAMPO.HE,Sampo,Finland,Financials,Equity
+NESTE.HE,Neste,Finland,Energy,Equity
+KNEBV.HE,Kone,Finland,Industrials,Equity
+FORTUM.HE,Fortum,Finland,Utilities,Equity
+UPM.HE,UPM-Kymmene,Finland,Materials,Equity
+STERV.HE,Stora Enso,Finland,Materials,Equity
+ELISA.HE,Elisa,Finland,Communication,Equity
+SAP.DE,SAP,Germany,Technology,Equity
+SIE.DE,Siemens,Germany,Industrials,Equity
+ALV.DE,Allianz,Germany,Financials,Equity
+BMW.DE,BMW,Germany,Consumer,Equity
+MBG.DE,Mercedes-Benz,Germany,Consumer,Equity
+VOW3.DE,Volkswagen,Germany,Consumer,Equity
+BAS.DE,BASF,Germany,Materials,Equity
+BAYN.DE,Bayer,Germany,Healthcare,Equity
+DTE.DE,Deutsche Telekom,Germany,Communication,Equity
+DBK.DE,Deutsche Bank,Germany,Financials,Equity
+ADS.DE,Adidas,Germany,Consumer,Equity
+MUV2.DE,Munich Re,Germany,Financials,Equity
+RWE.DE,RWE,Germany,Utilities,Equity
+IFX.DE,Infineon,Germany,Technology,Equity
+MC.PA,LVMH,France,Consumer,Equity
+OR.PA,L'Oreal,France,Consumer,Equity
+TTE.PA,TotalEnergies,France,Energy,Equity
+SAN.PA,Sanofi,France,Healthcare,Equity
+AIR.PA,Airbus,France,Industrials,Equity
+BNP.PA,BNP Paribas,France,Financials,Equity
+SU.PA,Schneider Electric,France,Industrials,Equity
+RMS.PA,Hermes,France,Consumer,Equity
+KER.PA,Kering,France,Consumer,Equity
+DG.PA,Vinci,France,Industrials,Equity
+ASML.AS,ASML,Netherlands,Technology,Equity
+ADYEN.AS,Adyen,Netherlands,Technology,Equity
+INGA.AS,ING Group,Netherlands,Financials,Equity
+HEIA.AS,Heineken,Netherlands,Consumer,Equity
+PHIA.AS,Philips,Netherlands,Healthcare,Equity
+ABN.AS,ABN AMRO,Netherlands,Financials,Equity
+NESN.SW,Nestle,Switzerland,Consumer,Equity
+NOVN.SW,Novartis,Switzerland,Healthcare,Equity
+UBSG.SW,UBS,Switzerland,Financials,Equity
+ZURN.SW,Zurich Insurance,Switzerland,Financials,Equity
+ABBN.SW,ABB,Switzerland,Industrials,Equity
+CFR.SW,Richemont,Switzerland,Consumer,Equity
+LONN.SW,Lonza,Switzerland,Healthcare,Equity
+SHEL.L,Shell,United Kingdom,Energy,Equity
+AZN.L,AstraZeneca,United Kingdom,Healthcare,Equity
+HSBA.L,HSBC,United Kingdom,Financials,Equity
+ULVR.L,Unilever,United Kingdom,Consumer,Equity
+BP.L,BP,United Kingdom,Energy,Equity
+GSK.L,GSK,United Kingdom,Healthcare,Equity
+RIO.L,Rio Tinto,United Kingdom,Materials,Equity
+BATS.L,British American Tobacco,United Kingdom,Consumer,Equity
+DGE.L,Diageo,United Kingdom,Consumer,Equity
+LSEG.L,London Stock Exchange,United Kingdom,Financials,Equity
+VOD.L,Vodafone,United Kingdom,Communication,Equity
+BARC.L,Barclays,United Kingdom,Financials,Equity
+GLEN.L,Glencore,United Kingdom,Materials,Equity
+ENI.MI,Eni,Italy,Energy,Equity
+ISP.MI,Intesa Sanpaolo,Italy,Financials,Equity
+ENEL.MI,Enel,Italy,Utilities,Equity
+UCG.MI,UniCredit,Italy,Financials,Equity
+RACE.MI,Ferrari,Italy,Consumer,Equity
+SAN.MC,Banco Santander,Spain,Financials,Equity
+IBE.MC,Iberdrola,Spain,Utilities,Equity
+ITX.MC,Inditex,Spain,Consumer,Equity
+BBVA.MC,BBVA,Spain,Financials,Equity
+TEF.MC,Telefonica,Spain,Communication,Equity
+7203.T,Toyota,Japan,Consumer,Equity
+6758.T,Sony,Japan,Technology,Equity
+8306.T,Mitsubishi UFJ,Japan,Financials,Equity
+6861.T,Keyence,Japan,Technology,Equity
+9984.T,SoftBank Group,Japan,Communication,Equity
+7974.T,Nintendo,Japan,Consumer,Equity
+6501.T,Hitachi,Japan,Industrials,Equity
+8035.T,Tokyo Electron,Japan,Technology,Equity
+SPY,S&P 500 ETF,United States,Broad market,Equity fund
+VOO,Vanguard S&P 500,United States,Broad market,Equity fund
+VTI,Vanguard Total US Market,United States,Broad market,Equity fund
+QQQ,Nasdaq 100 ETF,United States,Technology,Equity fund
+IWM,Russell 2000 Small Cap,United States,Broad market,Equity fund
+VT,Vanguard Total World,Global,Broad market,Equity fund
+VEA,Vanguard Developed Markets,Global,Broad market,Equity fund
+VWO,Vanguard Emerging Markets,Emerging markets,Broad market,Equity fund
+EFA,MSCI EAFE,Global,Broad market,Equity fund
+EEM,MSCI Emerging Markets,Emerging markets,Broad market,Equity fund
+VGT,Vanguard Info Tech,United States,Technology,Equity fund
+XLK,Technology Select Sector,United States,Technology,Equity fund
+XLF,Financial Select Sector,United States,Financials,Equity fund
+XLE,Energy Select Sector,United States,Energy,Equity fund
+XLV,Health Care Select Sector,United States,Healthcare,Equity fund
+XLP,Consumer Staples Select,United States,Consumer,Equity fund
+XLU,Utilities Select Sector,United States,Utilities,Equity fund
+XLI,Industrial Select Sector,United States,Industrials,Equity fund
+XLY,Consumer Discretionary Select,United States,Consumer,Equity fund
+XLB,Materials Select Sector,United States,Materials,Equity fund
+XLRE,Real Estate Select Sector,United States,Real Estate,Equity fund
+SCHD,Schwab US Dividend,United States,Dividend,Equity fund
+VYM,Vanguard High Dividend,United States,Dividend,Equity fund
+MTUM,iShares Momentum Factor,United States,Factor,Equity fund
+QUAL,iShares Quality Factor,United States,Factor,Equity fund
+USMV,iShares Min Volatility,United States,Factor,Equity fund
+VLUE,iShares Value Factor,United States,Factor,Equity fund
+ARKK,ARK Innovation,United States,Technology,Equity fund
+EWD,MSCI Sweden ETF,Sweden,Broad market,Equity fund
+EWG,MSCI Germany ETF,Germany,Broad market,Equity fund
+EWJ,MSCI Japan ETF,Japan,Broad market,Equity fund
+EWU,MSCI United Kingdom ETF,United Kingdom,Broad market,Equity fund
+EWC,MSCI Canada ETF,Canada,Broad market,Equity fund
+EWA,MSCI Australia ETF,Australia,Broad market,Equity fund
+EWZ,MSCI Brazil ETF,Brazil,Broad market,Equity fund
+FEZ,Euro Stoxx 50 ETF,Europe,Broad market,Equity fund
+IEUR,Core MSCI Europe,Europe,Broad market,Equity fund
+INDA,MSCI India ETF,India,Broad market,Equity fund
+MCHI,MSCI China ETF,China,Broad market,Equity fund
+AGG,US Aggregate Bond,United States,Aggregate,Bond fund
+BND,Vanguard Total Bond,United States,Aggregate,Bond fund
+TLT,20+ Year Treasury,United States,Government,Bond fund
+IEF,7-10 Year Treasury,United States,Government,Bond fund
+SHY,1-3 Year Treasury,United States,Government,Bond fund
+GOVT,US Treasury Bond,United States,Government,Bond fund
+VGIT,Intermediate Treasury,United States,Government,Bond fund
+VGLT,Long-Term Treasury,United States,Government,Bond fund
+LQD,Investment Grade Corporate,United States,Credit,Bond fund
+VCIT,Intermediate Corporate,United States,Credit,Bond fund
+VCSH,Short-Term Corporate,United States,Credit,Bond fund
+HYG,High Yield Corporate,United States,High yield,Bond fund
+JNK,High Yield Bond,United States,High yield,Bond fund
+TIP,TIPS Inflation-Protected,United States,Inflation-linked,Bond fund
+EMB,Emerging Markets Bond,Emerging markets,Government,Bond fund
+BNDX,International Bond,Global,Aggregate,Bond fund
+GLD,Gold ETF,Global,Precious metals,Commodity
+IAU,iShares Gold Trust,Global,Precious metals,Commodity
+SLV,Silver ETF,Global,Precious metals,Commodity
+DBC,Commodity Index Fund,Global,Broad commodity,Commodity
+USO,US Oil Fund,Global,Energy,Commodity
+VNQ,Vanguard US REIT,United States,Real Estate,Real estate
+VNQI,Vanguard Global ex-US REIT,Global,Real Estate,Real estate
+BTC-USD,Bitcoin,Global,Crypto,Crypto
+ETH-USD,Ethereum,Global,Crypto,Crypto
+RHHBY,Roche (ADR),Switzerland,Healthcare,Equity

@@ -2,7 +2,8 @@
 
 **You think you own 6 things. You own 1.2.**
 
-Paste your holdings — stocks, bonds, funds — and this tells you three things your
+Pick your holdings from a searchable universe of 244 instruments across 20
+countries — stocks, bonds, funds, commodities — and this tells you what your
 broker never will:
 
 1. **How many independent bets you actually hold.** Six positions that all rise and
@@ -11,6 +12,8 @@ broker never will:
    rarely the same place.
 3. **What would have happened to you** in 2008, in March 2020, and through 2022 —
    using real prices, not a questionnaire.
+4. **Which holdings are secretly the same bet**, clustered by correlation.
+5. **What you should add** to actually diversify — ranked, measured, not guessed.
 
 ## The demo
 
@@ -36,11 +39,15 @@ python3 -m venv .venv
 .venv/bin/streamlit run app.py
 ```
 
-Enter holdings as `TICKER, weight` — one per line. Weights are normalised, so they
-can be percentages, kronor, or number of shares' worth. Nordic tickers work with the
-Yahoo suffix (`VOLV-B.ST`, `ERIC-B.ST`).
+Filter the universe by country, sector or asset class, then search it by ticker or
+company name. Start from a preset, weight equally or by hand. Prices are cached to
+`.cache/` on first fetch, so the demo survives bad wifi.
 
-Prices are cached to `.cache/` on first fetch, so the demo survives bad wifi.
+To extend the instrument list, append to `universe.csv` and run:
+
+```bash
+.venv/bin/python validate_universe.py --prune
+```
 
 ## How it works
 
@@ -50,6 +57,9 @@ Prices are cached to `.cache/` on first fetch, so the demo survives bad wifi.
 | Share of risk | Marginal contribution to risk, `w_i · (Σw)_i / σ_p`. Sums to 100%, so it sits next to the weight column and the gap is visible. |
 | "Explained by SPY" | R² of the portfolio's daily returns regressed on the benchmark. Above 90% means you are paying for stock picking and receiving the index. |
 | Crash replay | Peak-to-trough windows of real crises. Holdings that did not exist yet are dropped and the rest reweighted — `coverage` reports how much of the portfolio was actually around. |
+| Same-bet clusters | Single-linkage union-find over the correlation matrix. Five names above the threshold are one cluster, and one bet. |
+| Bad days (VaR / CVaR) | Historical percentiles of daily returns. CVaR is the average of the tail beyond VaR — the number that says how bad "bad" gets. |
+| What to add | Each candidate is added at 10%, the portfolio scaled to make room, and effective bets recomputed on the history the two actually share, so a short track record cannot flatter a candidate. |
 
 No fitted models, no black box. Everything is numpy on a covariance matrix, in
 `xray.py`, and each function maps to exactly one claim the app makes.
@@ -57,18 +67,20 @@ No fitted models, no black box. Everything is numpy on a covariance matrix, in
 ## Layout
 
 ```
-app.py     Streamlit UI
-xray.py    the analytics — all of the actual thinking lives here
-data.py    price loading + on-disk cache
-test_xray.py   sanity checks on synthetic data
+app.py               Streamlit UI, five tabs
+xray.py              core risk maths
+analysis.py          exposure, tail risk, clustering, diversifier scan
+data.py              price loading + on-disk cache
+universe.csv         244 instruments, 20 countries
+validate_universe.py checks every ticker still resolves
+test_xray.py         sanity checks on synthetic data, no network needed
+COORDINATION.md      file ownership for working two agents in parallel
 ```
 
 ## Things to extend
 
 - **Cheaper twin.** Search for a portfolio with the same risk profile and a lower
   total fee, then show the 30-year cost of the difference in kronor.
-- **Marginal trade.** "What does adding 5% of X do?" — recompute effective bets and
-  show whether it genuinely diversifies or is just another hat on the same bet.
 - **Fund look-through.** Resolve funds to their real holdings so overlap shows up at
   the company level, not just in the correlations.
 - **Custom shock.** Let the user draw their own scenario — rates +2%, tech −30%.

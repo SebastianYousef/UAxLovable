@@ -52,7 +52,56 @@ def main():
     assert 0.0 < average_correlation(returns, weights) < 1.0
     assert len(portfolio_series(returns, weights)) == len(returns)
 
+    test_analysis_layer()
+
     print(f"all checks passed  (4 positions -> {bets:.2f} effective bets)")
+
+
+
+
+def test_analysis_layer():
+    """Checks for the second-layer analytics in analysis.py."""
+    from analysis import (correlation_clusters, diversifier_scan,
+                          exposure_breakdown, longest_underwater, tail_risk,
+                          top_holdings_share)
+    from xray import risk_contributions
+
+    returns = build_fixture()
+    weights = normalise_weights(pd.Series(dict.fromkeys("ABCD", 25.0)))
+
+    clusters = correlation_clusters(returns, threshold=0.75)
+    clone_cluster = max(clusters, key=len)
+    assert set(clone_cluster) == {"A", "B", "C"}, (
+        f"the three clones should form one cluster, got {clusters}"
+    )
+    assert ["D"] in clusters, "the independent asset should stand alone"
+
+    meta = pd.DataFrame({
+        "ticker": list("ABCD"),
+        "sector": ["Tech", "Tech", "Tech", "Bonds"],
+    })
+    breakdown = exposure_breakdown(risk_contributions(returns, weights), meta, "sector")
+    assert abs(breakdown["weight"].sum() - 1.0) < 1e-9
+    assert abs(breakdown["risk_share"].sum() - 1.0) < 1e-9
+    assert breakdown.loc["Tech", "gap"] > 0, "the correlated sector should over-carry risk"
+
+    tails = tail_risk(portfolio_series(returns, weights))
+    assert tails["var_95"] < 0 and tails["cvar_95"] <= tails["var_95"], (
+        "CVaR must be at least as bad as VaR"
+    )
+    assert 0.0 < tails["positive_days"] < 1.0
+
+    flat = pd.Series([0.01, -0.02, 0.005, 0.004, 0.05])
+    assert longest_underwater(flat) == 3, "should count the run below the peak"
+
+    assert abs(top_holdings_share(weights, 4) - 1.0) < 1e-9
+
+    scan = diversifier_scan(returns[["A", "B", "C"]],
+                            normalise_weights(pd.Series(dict.fromkeys("ABC", 1.0))),
+                            returns[["D"]])
+    assert not scan.empty and scan.loc["D", "bets_gained"] > 0, (
+        "adding an uncorrelated asset must increase effective bets"
+    )
 
 
 if __name__ == "__main__":
