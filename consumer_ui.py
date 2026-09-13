@@ -434,7 +434,11 @@ def render_portfolio():
             saved["weights"] = dict.fromkeys(chosen, 1 / len(chosen))
             saved["is_example"] = True
             _fit_cap_to_holdings(len(chosen))
-            st.session_state.pop("consumer_edit_holdings", None)
+            # Assign rather than delete: dropping the key only clears the server
+            # copy, and the browser keeps showing the old list because the
+            # multiselect is still mounted and ignores a changed default. Writing
+            # the value is what marks the widget for the frontend to pick up.
+            st.session_state["consumer_edit_holdings"] = list(chosen)
             st.session_state.pop("consumer_edit_weights", None)
             _clear_split()
             st.rerun()

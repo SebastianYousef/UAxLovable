@@ -102,6 +102,25 @@ class WeightSplitTests(unittest.TestCase):
         self.assertEqual(list(app.session_state["_consumer_profile"]["weights"]),
                          PRESETS[target])
 
+    def test_example_replaces_the_list_of_what_you_own(self):
+        """The browser only adopts a new list when the widget is marked to update.
+
+        Checking the value alone would pass even while the page kept showing the
+        old holdings, so this asserts on the flag that actually reaches Chrome.
+        """
+        app = portfolio_page()
+        target = "Swedish shares example"
+
+        with patch("data.fetch_prices", side_effect=fake_prices):
+            next(s for s in app.selectbox
+                 if s.label == "Example portfolio").set_value(target).run()
+            next(b for b in app.button if b.label == "Use this example").click().run()
+
+        holdings = app.multiselect(key="consumer_edit_holdings")
+        self.assertEqual(holdings.value, PRESETS[target])
+        self.assertTrue(holdings.proto.set_value,
+                        "the browser would keep showing the previous holdings")
+
     def test_typed_amounts_still_work(self):
         app = portfolio_page()
         with patch("data.fetch_prices", side_effect=fake_prices):
