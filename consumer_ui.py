@@ -272,6 +272,111 @@ def _home_trades(run):
                        help="Download all existing holdings, current and target weights, illustrative buy/sell amounts, estimated costs and reasons.")
 
 
+def _split_key(ticker):
+    return f"consumer_split_{ticker}"
+
+
+def _write_split(shares: dict, target: int) -> None:
+    """Round to whole percent without losing or inventing a point.
+
+    Proportional rescaling almost never lands on integers, so the rounding
+    drift is absorbed by the largest holding, where it is least visible.
+    """
+    rounded = {t: int(round(v)) for t, v in shares.items()}
+    if not rounded:
+        return
+    largest = max(rounded, key=rounded.get)
+    rounded[largest] = max(0, rounded[largest] + target - sum(rounded.values()))
+    for ticker, value in rounded.items():
+        st.session_state[_split_key(ticker)] = value
+
+
+def _rebalance_split(moved: str, tickers: list) -> None:
+    """Keep every slider summing to 100%: the others absorb the change pro rata.
+
+    Dragging one holding up takes the difference from the rest in proportion
+    to what they already hold, so their relative sizes survive the move.
+    """
+    others = [t for t in tickers if t != moved]
+    if not others:
+        st.session_state[_split_key(moved)] = 100
+        return
+
+    remaining = 100 - int(st.session_state[_split_key(moved)])
+    current = {t: float(st.session_state.get(_split_key(t), 0)) for t in others}
+    total = sum(current.values())
+
+    if total > 0:
+        shares = {t: current[t] / total * remaining for t in others}
+    else:
+        shares = dict.fromkeys(others, remaining / len(others))
+    _write_split(shares, remaining)
+
+
+def _sync_split(selected: list, saved: dict) -> None:
+    """Seed the sliders, keeping what the user already set for kept holdings."""
+    previous = st.session_state.get("consumer_split_tickers")
+    if previous == selected:
+        return
+
+    base = {}
+    for ticker in selected:
+        key = _split_key(ticker)
+        if previous and ticker in previous and key in st.session_state:
+            base[ticker] = float(st.session_state[key])
+        else:
+            base[ticker] = float(saved["weights"].get(ticker, 0)) * 100
+
+    total = sum(base.values())
+    if total <= 0:
+        base = dict.fromkeys(selected, 100 / len(selected))
+        total = 100
+
+    _write_split({t: v / total * 100 for t, v in base.items()}, 100)
+    st.session_state["consumer_split_tickers"] = list(selected)
+
+
+def _clear_split():
+    """Forget slider positions, but keep the user's choice of editor."""
+    for key in list(st.session_state):
+        if key.startswith("consumer_split_") and key != "consumer_split_mode":
+            del st.session_state[key]
+
+
+def _split_sliders(selected: list, saved: dict, names: dict) -> pd.Series:
+    """One slider per holding, always totalling 100%."""
+    _sync_split(selected, saved)
+    st.caption("Drag any holding and the rest adjust to keep the total at 100%.")
+
+    for ticker in selected:
+        st.slider(f"{ticker} · {names.get(ticker, ticker)}", 0, 100,
+                  key=_split_key(ticker), format="%d%%",
+                  on_change=_rebalance_split, args=(ticker, selected),
+                  help=help_text("weights"))
+
+    values = pd.Series({t: float(st.session_state[_split_key(t)]) for t in selected})
+    st.markdown(f"**Total: {values.sum():.0f}%**")
+    return values
+
+
+def _split_table(selected: list, saved: dict) -> pd.Series:
+    """Free-form amounts, converted into shares of the total on save."""
+    st.caption("Enter relative amounts or percentages. We convert them into "
+               "shares of the total. A zero removes that investment from the "
+               "analysis.")
+    frame = pd.DataFrame({"Ticker": selected,
+                          "Amount or %": [saved["weights"].get(t, 0) * 100
+                                          for t in selected]})
+    edited = st.data_editor(
+        frame, disabled=["Ticker"], hide_index=True,
+        key="consumer_edit_weights", width="stretch", column_config={
+            "Ticker": st.column_config.TextColumn("Investment", help=help_text("ticker")),
+            "Amount or %": st.column_config.NumberColumn(
+                "Amount or %", min_value=0.0, step=0.1, format="%.2f",
+                help=help_text("weights"))})
+    return edited.set_index("Ticker")["Amount or %"]
+
+
 def render_portfolio():
     saved = profile()
     st.title("Your portfolio")
@@ -287,23 +392,32 @@ def render_portfolio():
             _fit_cap_to_holdings(len(chosen))
             st.session_state.pop("consumer_edit_holdings", None)
             st.session_state.pop("consumer_edit_weights", None)
+            _clear_split()
             st.rerun()
     selected = st.multiselect("What do you own?", sorted(set(names) | set(saved["weights"])),
         default=list(saved["weights"]), format_func=lambda t: f"{t} · {names.get(t, t)}",
         max_selections=15, key="consumer_edit_holdings", help=help_text("weights"))
+    st.markdown("**How is your money split today?**", help=help_text("weights"))
+    if not selected:
+        st.info("Pick what you own above, then set how your money is split.")
+        amounts = pd.Series(dtype=float)
+    else:
+        # Sliders live outside the form on purpose: inside one, Streamlit defers
+        # every callback until submit, so they could not rebalance as you drag.
+        mode = st.radio("How would you like to set it?",
+                        ["Sliders — always adds up to 100%", "Type exact amounts"],
+                        horizontal=True, key="consumer_split_mode",
+                        label_visibility="collapsed")
+        if mode.startswith("Sliders"):
+            amounts = _split_sliders(selected, saved, names)
+        else:
+            amounts = _split_table(selected, saved)
+
     with st.form("consumer_portfolio_form"):
         a, b = st.columns(2)
         value = a.number_input("How much is your portfolio worth?", 100.0, 1e10, float(saved["value"]), 1000.0, help=help_text("current_value"))
         options = ["USD", "SEK", "EUR", "GBP", "CAD", "AUD"]
         base = b.selectbox("Your currency", options, index=options.index(saved["base"]), help=help_text("currency"))
-        st.markdown("**How is your money split today?**", help=help_text("weights"))
-        st.caption("Enter relative amounts or percentages. We convert them into shares of the total. A zero removes that investment from the analysis.")
-        frame = pd.DataFrame({"Ticker": selected,
-            "Amount or %": [saved["weights"].get(t, 0) * 100 for t in selected]})
-        edited = st.data_editor(frame, disabled=["Ticker"], hide_index=True,
-            key="consumer_edit_weights", width="stretch", column_config={
-                "Ticker": st.column_config.TextColumn("Investment", help=help_text("ticker")),
-                "Amount or %": st.column_config.NumberColumn("Amount or %", min_value=0.0, step=0.1, format="%.2f", help=help_text("weights"))})
         own = st.checkbox("These are my holdings (remove the example label)", value=not saved["is_example"])
         with st.expander("Data options"):
             source = st.selectbox("Price data", ["Yahoo Finance", "Synthetic demo (offline)"],
@@ -313,7 +427,7 @@ def render_portfolio():
         submit = st.form_submit_button("Save portfolio & see my plan", type="primary")
     if submit:
         try:
-            weights = validate_holdings(edited.set_index("Ticker")["Amount or %"])
+            weights = validate_holdings(amounts)
         except ValueError as exc:
             st.error(str(exc))
         else:
