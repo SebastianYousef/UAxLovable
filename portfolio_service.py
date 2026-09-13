@@ -28,7 +28,7 @@ PRESETS = {
     "Magnificent Seven example": ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "TSLA"],
 }
 DEFAULT_SETTINGS = {
-    "samples": 10000, "cap": 0.5, "risk_free": 0.03, "seed": 42,
+    "samples": 10000, "cap": 0.5, "floor": 0.01, "risk_free": 0.03, "seed": 42,
     "mean_shrinkage": 0.5, "covariance_shrinkage": 0.1,
     "cost_bps": 10.0, "band": 0.05, "review_days": 63,
     "block_days": 21, "years": 5, "paths": 500,
@@ -64,7 +64,7 @@ def build_research(prices: pd.DataFrame, current: pd.Series, goal: str,
         raise ValueError("Enter a portfolio value above zero.")
     returns = aligned_returns(prices.loc[:, current.index])
     params = {key: settings[key] for key in (
-        "samples", "cap", "risk_free", "seed", "mean_shrinkage", "covariance_shrinkage")}
+        "samples", "cap", "floor", "risk_free", "seed", "mean_shrinkage", "covariance_shrinkage")}
     result = optimize(returns, current, **params)
     validation = holdout_validation(returns, current, **params,
         cost_bps=settings["cost_bps"], band=settings["band"], review_days=settings["review_days"])
@@ -75,7 +75,8 @@ def build_research(prices: pd.DataFrame, current: pd.Series, goal: str,
         block_days=settings["block_days"], review_days=settings["review_days"],
         band=settings["band"], cost_bps=settings["cost_bps"])
     plan, trades = rebalance_plan(current, target, value, settings["band"], settings["cost_bps"])
-    plan["Why"] = [trade_reason(ticker, row, method, settings["cap"]) for ticker, row in plan.iterrows()]
+    plan["Why"] = [trade_reason(ticker, row, method, settings["cap"], settings["floor"])
+                   for ticker, row in plan.iterrows()]
     identifier = hashlib.sha256(repr((current.to_dict(), goal, value, base, source,
         start, settings, str(returns.index[-1]), result.weights.to_dict())).encode()).hexdigest()[:20]
     return dict(id=identifier, result=result, validation=validation, returns=returns,
@@ -86,11 +87,15 @@ def build_research(prices: pd.DataFrame, current: pd.Series, goal: str,
         plan=plan, trades=trades, years=settings["years"], paths=settings["paths"])
 
 
-def trade_reason(ticker: str, row: pd.Series, method: str, cap: float) -> str:
+def trade_reason(ticker: str, row: pd.Series, method: str, cap: float,
+                 floor: float = 0.0) -> str:
     if row["Action"] == "Hold":
         return "No material trade is needed in this holding for the current plan. Keep it as it is for now."
     if row["Action"] == "Sell" and row["Target weight"] >= row["Current weight"] - 1e-10:
         return "This small sale helps fund trading costs while keeping the intended share of the smaller after-cost portfolio."
+    if floor > 0 and row["Target weight"] <= 1e-9 and row["Action"] == "Sell":
+        return (f"Sell this holding in full. The model wanted less than the {floor:.1%} minimum "
+                "worth holding, so the money goes to your other holdings instead of leaving a sliver here.")
     if row["Current weight"] > cap + 1e-8 and row["Action"] == "Sell":
         return f"Reduce its share from {row['Current weight']:.1%}; it exceeds the {cap:.0%} target limit for one holding."
     if method == EQUAL:

@@ -48,6 +48,22 @@ def _weights(weights: pd.Series, columns: pd.Index) -> pd.Series:
     return weights / weights.sum()
 
 
+def _project_bounds(matrix: np.ndarray, low: np.ndarray, high: np.ndarray) -> np.ndarray:
+    """Euclidean projection of each row onto sum(w)=1 within per-holding bounds.
+
+    Bisects the single shift that makes the clipped row add to 100%. Requires
+    every row's bounds to bracket it: sum(low) <= 1 <= sum(high).
+    """
+    left = (matrix - high).min(axis=1, keepdims=True)
+    right = (matrix - low).max(axis=1, keepdims=True)
+    for _ in range(64):
+        middle = (left + right) / 2
+        too_much = np.clip(matrix - middle, low, high).sum(axis=1, keepdims=True) > 1
+        left = np.where(too_much, middle, left)
+        right = np.where(too_much, right, middle)
+    return np.clip(matrix - (left + right) / 2, low, high)
+
+
 def project_weights(values: np.ndarray, cap: float) -> np.ndarray:
     """Euclidean projection onto sum(w)=1, 0<=w<=cap, row by row."""
     values = np.asarray(values, dtype=float)
@@ -59,15 +75,79 @@ def project_weights(values: np.ndarray, cap: float) -> np.ndarray:
     if abs(cap * n - 1) < 1e-10:
         result = np.full_like(matrix, 1 / n)
     else:
-        lower = matrix.min(axis=1, keepdims=True) - cap
-        upper = matrix.max(axis=1, keepdims=True)
-        for _ in range(48):
-            middle = (lower + upper) / 2
-            too_much = np.clip(matrix - middle, 0, cap).sum(axis=1, keepdims=True) > 1
-            lower = np.where(too_much, middle, lower)
-            upper = np.where(too_much, upper, middle)
-        result = np.clip(matrix - (lower + upper) / 2, 0, cap)
+        result = _project_bounds(matrix, np.zeros(1), np.full(1, cap))
     return result[0] if one_row else result
+
+
+def check_floor(cap: float, floor: float) -> None:
+    """A floor is feasible only if the fewest holdings the cap allows can carry it."""
+    if not np.isfinite(cap) or cap <= 0:
+        raise ValueError("Maximum weight must be above 0% and at most 100%.")
+    if not np.isfinite(floor) or floor < 0 or floor * np.ceil(1 / cap - 1e-9) > 1 + 1e-12:
+        raise ValueError(
+            "The minimum weight must be between 0% and "
+            f"{100 / np.ceil(1 / cap - 1e-9):.2f}% for a {cap:.0%} maximum weight.")
+
+
+def _dust(weights: np.ndarray, active: np.ndarray, cap: float, floor: float) -> np.ndarray:
+    """Held positions below the floor, sparing the largest ones needed to reach 100%."""
+    needed = int(np.ceil(1 / cap - 1e-9))
+    order = np.argsort(np.where(active, weights, -1.0), axis=1)[:, ::-1]
+    rank = np.argsort(order, axis=1)
+    return active & (weights < floor - 1e-9) & (rank >= needed)
+
+
+def _project_held(values: np.ndarray, active: np.ndarray, cap: float,
+                  floor: float = 0.0) -> np.ndarray:
+    """Share 100% among the held positions only, each between the floor and the cap."""
+    return _project_bounds(values, np.where(active, floor, 0.0), np.where(active, cap, 0.0))
+
+
+def trim_to_floor(values: np.ndarray, cap: float, floor: float) -> np.ndarray:
+    """Project onto the cap, then sell off positions too small to be worth holding.
+
+    Every weight ends at zero or at least `floor`; dust is dropped rather than
+    rounded up, and the freed weight is shared by the holdings that remain.
+    """
+    values = np.asarray(values, dtype=float)
+    one_row = values.ndim == 1
+    matrix = np.atleast_2d(values)
+    weights = project_weights(matrix, cap)  # validates the cap before the floor
+    check_floor(cap, floor)
+    if floor > 0:
+        active = np.ones(matrix.shape, dtype=bool)
+        for _ in range(matrix.shape[1]):
+            drop = _dust(weights, active, cap, floor)
+            if not drop.any():
+                break
+            active &= ~drop
+            weights = _project_held(matrix, active, cap)
+        # The holdings that survive now carry the floor itself: with the fewest
+        # holdings the cap allows, one of them can still sit under it.
+        weights = _project_held(matrix, active, cap, floor)
+    return weights[0] if one_row else weights
+
+
+def _drop_dust_solution(solve, n: int, cap: float, floor: float) -> np.ndarray:
+    """Re-solve on the holdings that survive the floor until none are left below it.
+
+    `solve(active, floor)` optimizes over the held holdings alone. The floor is
+    zero while dust is being removed, then binding for the holdings that remain.
+    """
+    check_floor(cap, floor)
+    active = np.ones(n, dtype=bool)
+    for _ in range(n):
+        weights = np.zeros(n)
+        weights[active] = solve(active, 0.0)
+        if floor <= 0:
+            return weights
+        drop = _dust(weights[None], active[None], cap, floor)[0]
+        if not drop.any():
+            break
+        active &= ~drop
+    weights = np.zeros(n)
+    weights[active] = solve(active, floor)
+    return weights
 
 
 def estimate_moments(returns: pd.DataFrame, mean_shrinkage: float = 0.5,
@@ -88,32 +168,47 @@ def estimate_moments(returns: pd.DataFrame, mean_shrinkage: float = 0.5,
     return means, covariance
 
 
-def minimum_variance(covariance: np.ndarray, cap: float) -> np.ndarray:
+def _minimum_variance(covariance: np.ndarray, cap: float, floor: float = 0.0) -> np.ndarray:
     """Projected gradient on the convex long-only minimum-variance problem."""
-    w = np.full(len(covariance), 1 / len(covariance))
+    n = len(covariance)
+    low, high = np.full(n, floor), np.full(n, cap)
+    w = _project_bounds(np.full((1, n), 1 / n), low, high)[0]
     largest = float(np.linalg.eigvalsh(covariance).max())
     if largest <= 0:
         raise ValueError("Covariance must have positive variance.")
     for _ in range(5000):
-        new = project_weights(w - covariance @ w / largest, cap)
+        new = _project_bounds((w - covariance @ w / largest)[None], low, high)[0]
         if np.max(np.abs(new - w)) < 1e-9:
             return new
         w = new
     raise ValueError("Minimum-variance solver did not converge; increase covariance shrinkage.")
 
 
-def _inverse_volatility(covariance: np.ndarray, cap: float) -> np.ndarray:
+def minimum_variance(covariance: np.ndarray, cap: float, floor: float = 0.0) -> np.ndarray:
+    """Minimum variance, solved again without the holdings that fall under the floor."""
+    return _drop_dust_solution(
+        lambda active, bound: _minimum_variance(covariance[np.ix_(active, active)], cap, bound),
+        len(covariance), cap, floor)
+
+
+def _scaled_inverse_volatility(score: np.ndarray, cap: float, floor: float = 0.0) -> np.ndarray:
     # Redistribute capped weight proportionally, preserving inverse-vol ratios
-    # among all holdings that have not hit the cap.
-    score = 1 / np.sqrt(np.diag(covariance))
+    # among all holdings that have hit neither the floor nor the cap.
     lower, upper = 0.0, 1 / score.min()
     for _ in range(60):
         scale = (lower + upper) / 2
-        if np.minimum(scale * score, cap).sum() > 1:
+        if np.clip(scale * score, floor, cap).sum() > 1:
             upper = scale
         else:
             lower = scale
-    return np.minimum((lower + upper) / 2 * score, cap)
+    return np.clip((lower + upper) / 2 * score, floor, cap)
+
+
+def _inverse_volatility(covariance: np.ndarray, cap: float, floor: float = 0.0) -> np.ndarray:
+    score = 1 / np.sqrt(np.diag(covariance))
+    return _drop_dust_solution(
+        lambda active, bound: _scaled_inverse_volatility(score[active], cap, bound),
+        len(score), cap, floor)
 
 
 def model_metrics(weights: np.ndarray, means: np.ndarray, covariance: np.ndarray,
@@ -138,8 +233,8 @@ class AllocationResult:
 
 def optimize(returns: pd.DataFrame, current: pd.Series, samples: int = 10000,
              cap: float = 0.5, risk_free: float = 0.03, seed: int = 42,
-             mean_shrinkage: float = 0.5,
-             covariance_shrinkage: float = 0.1) -> AllocationResult:
+             mean_shrinkage: float = 0.5, covariance_shrinkage: float = 0.1,
+             floor: float = 0.0) -> AllocationResult:
     if not isinstance(samples, (int, np.integer)) or not 100 <= samples <= 100000:
         raise ValueError("Use between 100 and 100,000 candidate portfolios.")
     if not np.isfinite(risk_free) or not -0.1 <= risk_free <= 1:
@@ -148,6 +243,7 @@ def optimize(returns: pd.DataFrame, current: pd.Series, samples: int = 10000,
     means, covariance = estimate_moments(returns, mean_shrinkage, covariance_shrinkage)
     n = len(means)
     project_weights(np.ones(n) / n, cap)  # fail early for infeasible constraints
+    check_floor(cap, floor)
     rng = np.random.default_rng(seed)
     # Mix concentrated and diffuse Dirichlet draws. Projection respects the cap;
     # this is a reproducible search, not uniform sampling of the feasible region.
@@ -155,14 +251,16 @@ def optimize(returns: pd.DataFrame, current: pd.Series, samples: int = 10000,
     counts = [samples // 3, samples // 3, samples - 2 * (samples // 3)]
     candidates = np.vstack([rng.dirichlet(np.full(n, a), count)
                             for a, count in zip(concentrations, counts)])
-    candidates = project_weights(candidates, cap)
-    candidates[0] = np.full(n, 1 / n)
+    # The floor is applied to the candidates themselves, so the search only ever
+    # scores mixes a person could actually hold.
+    candidates = trim_to_floor(candidates, cap, floor)
+    candidates[0] = trim_to_floor(np.full(n, 1 / n), cap, floor)
     cloud = model_metrics(candidates, means, covariance, risk_free)
     chosen = int(cloud["Sharpe"].idxmax())
     allocations = pd.DataFrame({
         MC: candidates[chosen],
-        MIN_VAR: minimum_variance(covariance, cap),
-        INV_VOL: _inverse_volatility(covariance, cap),
+        MIN_VAR: minimum_variance(covariance, cap, floor),
+        INV_VOL: _inverse_volatility(covariance, cap, floor),
         EQUAL: np.full(n, 1 / n),
         CURRENT: current,
     }, index=returns.columns)
@@ -170,6 +268,7 @@ def optimize(returns: pd.DataFrame, current: pd.Series, samples: int = 10000,
     metrics.index = allocations.columns
     metrics["One-way turnover"] = allocations.sub(current, axis=0).abs().sum() / 2
     metrics["Largest weight"] = allocations.max()
+    metrics["Holdings"] = (allocations > 1e-9).sum()
     return AllocationResult(allocations, metrics, cloud, means, covariance)
 
 
@@ -273,14 +372,14 @@ def holdout_validation(returns: pd.DataFrame, current: pd.Series, *,
                        samples: int = 10000, cap: float = 0.5,
                        risk_free: float = 0.03, seed: int = 42,
                        mean_shrinkage: float = 0.5, covariance_shrinkage: float = 0.1,
-                       cost_bps: float = 10, band: float = 0.05,
+                       floor: float = 0.0, cost_bps: float = 10, band: float = 0.05,
                        review_days: int = 21) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.Timestamp]:
     split = int(len(returns) * 0.8)
     if split < 126 or len(returns) - split < 50:
         raise ValueError("Not enough history for an 80/20 chronological holdout.")
     training, test = returns.iloc[:split], returns.iloc[split:]
     fitted = optimize(training, current, samples, cap, risk_free, seed,
-                      mean_shrinkage, covariance_shrinkage)
+                      mean_shrinkage, covariance_shrinkage, floor)
     metrics, curves = {}, {}
     for method in fitted.weights:
         series, report = backtest(test, fitted.weights[method], current,

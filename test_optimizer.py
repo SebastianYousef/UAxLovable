@@ -6,7 +6,8 @@ import pandas as pd
 
 from optimizer import (CURRENT, EQUAL, INV_VOL, MC, MIN_VAR, aligned_returns,
                        backtest, bootstrap_scenarios, holdout_validation,
-                       minimum_variance, optimize, project_weights, rebalance_plan)
+                       minimum_variance, optimize, project_weights, rebalance_plan,
+                       trim_to_floor)
 from optimizer_market import convert_to_base
 
 
@@ -51,6 +52,47 @@ class OptimizerTests(unittest.TestCase):
         self.assertAlmostEqual(result.metrics.loc[MC, "Sharpe"], result.cloud["Sharpe"].max())
         self.assertLessEqual(result.metrics.loc[MIN_VAR, "Volatility"], result.cloud["Volatility"].min() + 1e-7)
         np.testing.assert_allclose(result.weights[CURRENT], self.current)
+
+    def test_trim_to_floor_drops_dust_and_keeps_the_budget(self):
+        rng = np.random.default_rng(3)
+        draws = rng.dirichlet(np.full(8, 0.2), 400)
+        for cap, floor in ((0.5, 0.05), (0.35, 0.05), (1.0, 0.2), (0.4, 1 / 3)):
+            weights = trim_to_floor(draws, cap, floor)
+            held = weights[weights > 1e-12]
+            np.testing.assert_allclose(weights.sum(axis=1), 1, atol=1e-8)
+            self.assertGreaterEqual(held.min(), floor - 1e-9)
+            self.assertLessEqual(weights.max(), cap + 1e-9)
+        np.testing.assert_allclose(trim_to_floor(draws, 0.5, 0.0),
+                                   project_weights(draws, 0.5), atol=1e-12)
+
+    def test_floor_must_fit_inside_the_cap(self):
+        with self.assertRaisesRegex(ValueError, "minimum weight"):
+            trim_to_floor(np.ones((1, 5)) / 5, 0.4, 0.4)
+        with self.assertRaisesRegex(ValueError, "minimum weight"):
+            optimize(self.returns, self.current, samples=200, cap=0.5, floor=0.6)
+
+    def test_every_suggested_mix_respects_the_floor(self):
+        result = optimize(self.returns, self.current, samples=600, cap=0.5, floor=0.1)
+        suggested = result.weights.drop(columns=[EQUAL, CURRENT])
+        held = suggested.to_numpy()[suggested.to_numpy() > 1e-12]
+        self.assertGreaterEqual(held.min(), 0.1 - 1e-9)
+        np.testing.assert_allclose(suggested.sum(), 1, atol=1e-10)
+        np.testing.assert_allclose(result.weights[CURRENT], self.current)
+        self.assertTrue((result.metrics["Holdings"] >= 1).all())
+
+    def test_floor_removes_slivers_a_free_search_leaves(self):
+        rng = np.random.default_rng(5)
+        factor = rng.normal(0.0004, 0.008, 630)
+        wide = pd.DataFrame(
+            {chr(65 + i): factor * (1.1 - 0.1 * i) + rng.normal(0, 0.004, 630)
+             for i in range(8)}, index=pd.bdate_range("2020-01-01", periods=630))
+        current = pd.Series(1 / 8, index=wide.columns)
+        free = optimize(wide, current, samples=3000, cap=0.5).weights[MC]
+        self.assertTrue(((free > 1e-12) & (free < 0.02)).any(),
+                        "fixture no longer produces a dust weight to remove")
+        kept = optimize(wide, current, samples=3000, cap=0.5, floor=0.02).weights[MC]
+        self.assertFalse(((kept > 1e-12) & (kept < 0.02)).any())
+        self.assertAlmostEqual(kept.sum(), 1)
 
     def test_inverse_volatility_uses_proportions(self):
         result = optimize(self.returns, self.current, samples=100, cap=1)

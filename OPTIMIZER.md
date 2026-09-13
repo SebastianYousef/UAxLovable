@@ -97,6 +97,18 @@ selected holdings. Native question-mark help uses the shared
 All target allocations are long-only, sum to one, and respect the selected
 per-holding cap. The current portfolio is an unconstrained comparison baseline.
 
+An optional per-holding floor (default 1%) removes dust positions: a suggested
+weight is either zero or at least the floor. Holdings below it are dropped and
+their weight is shared by the rest, never rounded up, so the plan cannot ask
+for a 0.1% sliver that costs more to trade and follow than it can contribute.
+The floor is a non-convex constraint, applied by re-solving on the holdings
+that survive until none is left below it, then projecting the survivors onto
+`floor <= w <= cap`. Because at least `ceil(1 / cap)` holdings are needed to
+reach 100%, the floor may not exceed `1 / ceil(1 / cap)`. Monte Carlo (its
+candidate draws included, so the search only scores mixes a person could hold),
+minimum variance and inverse volatility all honour it; equal weight and the
+current portfolio are shown as they are.
+
 The landing goals map to methods as follows: **Balance growth & risk** uses
 Monte Carlo highest Sharpe, **A smoother ride** uses minimum variance, and
 **Keep it simple** uses equal weight. Inverse volatility is available in the
@@ -104,7 +116,7 @@ detailed comparison. Goals select the objective, not whichever method happens
 to win the historical holdout.
 
 1. **Monte Carlo highest Sharpe:** sample a mixture of Dirichlet allocations,
-   project onto the capped simplex, and choose the highest estimated Sharpe
+   project onto the capped simplex, trim to the floor, and choose the highest estimated Sharpe
    among those draws. This is an approximate search, not a global-optimum proof
    or uniform sample of all feasible allocations.
 2. **Minimum variance:** solve the convex covariance objective using projected

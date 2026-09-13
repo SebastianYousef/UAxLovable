@@ -59,7 +59,9 @@ def profile():
             "start": "2015-01-01", "source": "Yahoo Finance", "is_example": True,
         }
     st.session_state.setdefault("_consumer_goal", next(iter(GOALS)))
-    st.session_state.setdefault("_consumer_settings", DEFAULT_SETTINGS.copy())
+    # Merge, not setdefault: a session saved before a new option still needs its key.
+    st.session_state["_consumer_settings"] = {
+        **DEFAULT_SETTINGS, **st.session_state.get("_consumer_settings", {})}
     return st.session_state["_consumer_profile"]
 
 
@@ -496,32 +498,38 @@ def render_monte_carlo():
     st.title("Monte Carlo, explained")
     st.write("Go deeper into the plan. Your holdings are shared across all pages; the controls here are optional.")
     section_heading("Choose how to explore your mix", "monte_carlo")
-    settings = st.session_state.setdefault("_consumer_settings", DEFAULT_SETTINGS.copy())
+    settings = {**DEFAULT_SETTINGS, **st.session_state.get("_consumer_settings", {})}
     with st.expander("Advanced assumptions"):
         with st.form("consumer_advanced"):
             a, b, c = st.columns(3)
             cap = a.slider("Maximum share in one holding (%)", 10, 100, round(settings["cap"] * 100), 5, help=help_text("cap"))
-            samples = b.select_slider("Portfolios to explore", [2000, 5000, 10000, 25000, 50000], value=settings["samples"], help=help_text("monte_carlo"))
-            rate = c.number_input("Assumed cash return (% / year)", -5.0, 25.0, settings["risk_free"] * 100, 0.25, help=help_text("risk_free"))
+            floor = b.slider("Smallest share worth holding (%)", 0.0, 20.0, settings["floor"] * 100, 0.5, help=help_text("floor"))
+            samples = c.select_slider("Portfolios to explore", [2000, 5000, 10000, 25000, 50000], value=settings["samples"], help=help_text("monte_carlo"))
             a, b, c = st.columns(3)
-            shrink = a.slider("Return estimate shrinkage (%)", 0, 100, round(settings["mean_shrinkage"] * 100), 10, help=help_text("shrinkage"))
-            cov = b.slider("Covariance shrinkage (%)", 0, 100, round(settings["covariance_shrinkage"] * 100), 5, help=help_text("covariance_shrinkage"))
-            seed = c.number_input("Random seed", 0, 2147483647, settings["seed"], 1, help=help_text("seed"))
+            rate = a.number_input("Assumed cash return (% / year)", -5.0, 25.0, settings["risk_free"] * 100, 0.25, help=help_text("risk_free"))
+            shrink = b.slider("Return estimate shrinkage (%)", 0, 100, round(settings["mean_shrinkage"] * 100), 10, help=help_text("shrinkage"))
+            cov = c.slider("Covariance shrinkage (%)", 0, 100, round(settings["covariance_shrinkage"] * 100), 5, help=help_text("covariance_shrinkage"))
             a, b, c = st.columns(3)
+            seed = a.number_input("Random seed", 0, 2147483647, settings["seed"], 1, help=help_text("seed"))
             reviews = {"Monthly": 21, "Quarterly": 63, "Yearly": 252}
-            review = a.selectbox("Review schedule", list(reviews), index=list(reviews.values()).index(settings["review_days"]), help=help_text("review"))
-            band = b.slider("Rebalance band (percentage points)", 1, 20, round(settings["band"] * 100), help=help_text("band"))
-            costs = c.number_input("Trading costs (basis points)", 0.0, 1000.0, float(settings["cost_bps"]), 5.0, help=help_text("costs"))
+            review = b.selectbox("Review schedule", list(reviews), index=list(reviews.values()).index(settings["review_days"]), help=help_text("review"))
+            band = c.slider("Rebalance band (percentage points)", 1, 20, round(settings["band"] * 100), help=help_text("band"))
             a, b, c = st.columns(3)
-            years = a.slider("Plan horizon (years)", 1, 10, settings["years"], help=help_text("scenarios"))
-            blocks = b.selectbox("Historical block (trading days)", [5, 21, 63], index=[5, 21, 63].index(settings["block_days"]), help=help_text("scenario_blocks"))
-            paths = c.select_slider("Simulated paths", [500, 1000, 2000], value=settings["paths"], help=help_text("scenarios"))
+            costs = a.number_input("Trading costs (basis points)", 0.0, 1000.0, float(settings["cost_bps"]), 5.0, help=help_text("costs"))
+            years = b.slider("Plan horizon (years)", 1, 10, settings["years"], help=help_text("scenarios"))
+            blocks = c.selectbox("Historical block (trading days)", [5, 21, 63], index=[5, 21, 63].index(settings["block_days"]), help=help_text("scenario_blocks"))
+            paths = st.select_slider("Simulated paths", [500, 1000, 2000], value=settings["paths"], help=help_text("scenarios"))
+            st.caption("A holding below the smallest share is sold in full instead of kept as a sliver. Your current mix and the even split are always shown as they are.")
             if st.form_submit_button("Update analysis", type="primary"):
+                largest = 100 / np.ceil(100 / cap - 1e-9)
                 if cap / 100 * len(profile()["weights"]) < 1:
                     st.error("The maximum shares must be able to add up to 100%. Increase the limit.")
+                elif floor > largest + 1e-9:
+                    st.error(f"With a {cap}% maximum, the smallest share can be at most {largest:.1f}%. "
+                             "Lower it, or raise the maximum share.")
                 else:
                     st.session_state["_consumer_settings"] = dict(samples=samples, cap=cap / 100,
-                        risk_free=rate / 100, seed=seed, mean_shrinkage=shrink / 100,
+                        floor=floor / 100, risk_free=rate / 100, seed=seed, mean_shrinkage=shrink / 100,
                         covariance_shrinkage=cov / 100, cost_bps=costs, band=band / 100,
                         review_days=reviews[review], block_days=blocks, years=years, paths=paths)
                     st.session_state.pop("_optimizer_scenario", None)

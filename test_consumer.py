@@ -131,6 +131,33 @@ class ConsumerJourneyTests(unittest.TestCase):
         self.assertEqual(cap.value, 50)
         self.assertEqual(set(app.dataframe[0].value.index), {"SPY", "AGG"})
 
+    def test_minimum_share_setting_drops_slivers(self):
+        app = app_fixture(weights=dict.fromkeys(PRESETS["Magnificent Seven example"], 1 / 7))
+        app.switch_page("views/monte_carlo.py").run()
+        self.assertFalse(app.exception, [e.message for e in app.exception])
+        floor = next(item for item in app.slider if item.label == "Smallest share worth holding (%)")
+        self.assertEqual(floor.value, DEFAULT_SETTINGS["floor"] * 100)
+
+        floor.set_value(10.0)
+        button(app, "Update analysis").click().run()
+        self.assertFalse(app.exception, [e.message for e in app.exception])
+        self.assertFalse(app.error, [e.value for e in app.error])
+        self.assertEqual(app.session_state["_consumer_settings"]["floor"], 0.1)
+        targets = app.dataframe[0].value["Target"]
+        self.assertTrue(((targets <= 1e-9) | (targets >= 0.1 - 1e-9)).all(), targets.to_dict())
+        self.assertAlmostEqual(targets.sum(), 1)
+
+    def test_minimum_share_above_what_the_maximum_allows_is_rejected(self):
+        app = app_fixture(weights=dict.fromkeys(PRESETS["Magnificent Seven example"], 1 / 7))
+        app.switch_page("views/monte_carlo.py").run()
+        next(item for item in app.slider if item.label == "Maximum share in one holding (%)").set_value(15)
+        next(item for item in app.slider if item.label == "Smallest share worth holding (%)").set_value(20.0)
+        button(app, "Update analysis").click().run()
+        self.assertTrue(any("smallest share can be at most 14.3%" in item.value for item in app.error),
+                        [item.value for item in app.error])
+        self.assertEqual(app.session_state["_consumer_settings"]["floor"], DEFAULT_SETTINGS["floor"])
+        self.assertEqual(app.session_state["_consumer_settings"]["cap"], DEFAULT_SETTINGS["cap"])
+
     def test_smaller_preset_adjusts_saved_cap_before_portfolio_save(self):
         original = PRESETS["Magnificent Seven example"]
         app = app_fixture(weights=dict.fromkeys(original, 1 / len(original)), settings={"cap": .15})

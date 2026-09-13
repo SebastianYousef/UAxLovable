@@ -37,6 +37,7 @@ TABLE_HELP = {
     "Sharpe": ("Return for the risk (Sharpe)", "sharpe"),
     "One-way turnover": ("Share of money to move", "turnover"),
     "Largest weight": ("Largest holding's share", "concentration"),
+    "Holdings": ("Holdings kept", "floor"),
     "Return (CAGR)": ("Yearly growth (CAGR)", "growth"),
     "Worst drawdown": ("Largest fall from a peak", "drawdown"),
     "Costs / starting value": ("Costs as share of starting money", "costs"),
@@ -151,7 +152,10 @@ def _allocation_tab(run: dict):
         _percent_table(weights, ["Current", "Target"])
     section_heading("Compare the ways to divide your money", "goal")
     _percent_table(result.metrics, ["Expected return", "Volatility", "One-way turnover", "Largest weight"], {"Sharpe": "{:.2f}"})
-    st.caption("All methods use the same past data and holding limit. Hover over a column heading to understand it. These are estimates before trading costs, not promises. Your current mix is shown for comparison even if it exceeds the suggested holding limit.")
+    caption = "All methods use the same past data and holding limit. Hover over a column heading to understand it. These are estimates before trading costs, not promises. Your current mix is shown for comparison even if it exceeds the suggested holding limit."
+    if run.get("floor", 0) > 0:
+        caption += f" Suggested mixes hold either nothing or at least {run['floor']:.1%} of a holding; equal weight and your current mix are shown as they are."
+    st.caption(caption)
     download = result.weights.copy()
     st.download_button("Download all target weights (CSV)", download.to_csv(),
                        "optimizer_weights.csv", "text/csv")
@@ -291,6 +295,8 @@ def render():
         st.caption("Weights are normalized to 100%. Enter position-value proportions, not share counts.")
         value = st.number_input("Current portfolio value", min_value=100.0, max_value=1e10, value=100000.0, step=1000.0, help=help_text("current_value"))
         cap_percent = st.slider("Maximum weight per holding (%)", 5, 100, 50, 5, help=help_text("cap"))
+        floor_percent = st.slider("Minimum weight per holding (%)", 0.0, 20.0, 1.0, 0.5,
+            help=help_text("floor") + " Weights below it are dropped to zero, not rounded up.")
         samples = st.select_slider("Monte Carlo portfolios", [2000, 5000, 10000, 25000, 50000], value=10000, help=help_text("monte_carlo"))
         risk_free = st.number_input("Assumed risk-free rate (% / year)", min_value=-5.0, max_value=25.0, value=3.0, step=0.25, help=help_text("risk_free"))
         with st.expander("Estimation and trading assumptions"):
@@ -318,6 +324,9 @@ def render():
             current = current / current.sum()
             if len(selected) * cap_percent < 100:
                 raise ValueError(f"The cap is infeasible: {len(selected)} × {cap_percent}% is below 100%. Increase the cap to at least {100 / len(selected):.1f}%.")
+            largest_floor = 100 / np.ceil(100 / cap_percent - 1e-9)
+            if floor_percent > largest_floor + 1e-9:
+                raise ValueError(f"The minimum weight is infeasible: with a {cap_percent}% cap, at least {np.ceil(100 / cap_percent - 1e-9):.0f} holdings must share 100%, so the minimum cannot exceed {largest_floor:.1f}%.")
             with st.spinner("Loading common history and comparing allocations…"):
                 if source == "Synthetic demo (offline)":
                     prices, currencies = _demo(tuple(selected)), {t: base for t in selected}
@@ -325,6 +334,7 @@ def render():
                     prices, currencies = _market(tuple(selected), start, base)
                 returns = aligned_returns(prices)
                 params = dict(samples=int(samples), cap=cap_percent / 100,
+                              floor=floor_percent / 100,
                               risk_free=risk_free / 100, seed=int(seed),
                               mean_shrinkage=mean_shrink / 100,
                               covariance_shrinkage=covariance_shrink / 100)
@@ -382,6 +392,8 @@ def render():
         st.write("The model compares different ways to divide the same portfolio. It learns from past prices, checks the approaches on later history, and shows what its assumptions mean for your money.")
         section_heading("Only change the mix of what you own", "cap")
         st.write(f"All your money stays invested in your selected holdings, with no borrowing or short selling. Each suggested holding is limited to {run['cap']:.0%} of the total. Your current mix is included as a comparison, even if it exceeds that limit.")
+        if run.get("floor", 0) > 0:
+            st.write(f"A suggested holding is also either dropped or kept at {run['floor']:.1%} or more, so no plan asks you to keep a sliver too small to be worth trading and following. Raising that minimum drops more holdings and concentrates the mix.")
         section_heading("Try thousands of possible mixes", "monte_carlo")
         st.write("The Monte Carlo search tries many random splits and keeps the mix with the best estimated return for its price swings. Other methods aim for steadier prices or a simpler split. Trying more mixes does not prove that the best possible one has been found.")
         section_heading("Reduce how much we trust historical estimates", "shrinkage")
