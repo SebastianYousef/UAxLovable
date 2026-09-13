@@ -3,11 +3,11 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-import numpy as np
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
 from optimizer import MIN_VAR
+from portfolio_service import DEFAULT_SETTINGS, demo_prices
 
 ROOT = Path(__file__).parent
 PAGE = ROOT / "optimizer_standalone.py"
@@ -50,24 +50,47 @@ class OptimizerUITests(unittest.TestCase):
         self.assertTrue(any("Provider unavailable" in e.value for e in app.error))
         self.assertEqual(len(app.tabs), 0)
 
-    def test_xray_app_exposes_the_merged_optimiser(self):
-        def prices(tickers, start):
-            rng = np.random.default_rng(4)
-            tickers = list(dict.fromkeys(tickers))
-            dates = pd.bdate_range("2005-01-03", "2026-09-11")
-            factor = rng.normal(0.0003, 0.009, (len(dates), 1))
-            values = factor + rng.normal(0, 0.005, (len(dates), len(tickers)))
-            return pd.DataFrame(100 * np.cumprod(1 + values, axis=0), index=dates, columns=tickers)
+    def test_xray_navigation_shares_the_saved_portfolio_with_optimizer(self):
+        weights = {"AAPL": .5, "MSFT": .3, "AGG": .2}
 
-        with patch("data.fetch_prices", side_effect=prices):
-            app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
-        self.assertFalse(app.exception, [e.message for e in app.exception])
-        self.assertEqual(app.title[0].value, "🔬 Portfolio X-Ray")
-        # The optimizer is a tab of the X-Ray app, driven by the holdings
-        # already chosen in its sidebar -- there is no second picker.
-        self.assertIn("Optimise", [tab.label for tab in app.tabs])
-        self.assertEqual(app.multiselect(key="holdings").value,
-                         ["SPY", "QQQ", "VGT", "AAPL", "MSFT", "AGG"])
+        def prices(tickers, start, base):
+            return demo_prices(tuple(tickers)), dict.fromkeys(tickers, base)
+
+        app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30)
+        # Existing X-Ray session holdings migrate to the consumer profile.
+        app.session_state["holdings"] = list(weights)
+        app.session_state["weight_table"] = weights.copy()
+        app.session_state["_consumer_goal"] = "A smoother ride"
+        app.session_state["_consumer_settings"] = {
+            **DEFAULT_SETTINGS, "samples": 2000, "years": 1,
+        }
+        with patch("consumer_ui.market_prices", side_effect=prices) as market:
+            app.run()
+            self.assertFalse(app.exception, [e.message for e in app.exception])
+            self.assertFalse(app.error, [e.value for e in app.error])
+            self.assertEqual(app.title[0].value, "A clearer plan for your money.")
+            self.assertTrue(any(m.label == "The middle outcome" for m in app.metric))
+            self.assertEqual(app.session_state["_consumer_profile"]["weights"], weights)
+
+            app.switch_page("views/monte_carlo.py").run()
+            self.assertFalse(app.exception, [e.message for e in app.exception])
+            self.assertFalse(app.error, [e.value for e in app.error])
+            self.assertEqual(app.title[0].value, "Monte Carlo, explained")
+            self.assertEqual([tab.label for tab in app.tabs],
+                             ["Compare mixes", "Reality check", "Possible futures", "Buy & sell details"])
+            self.assertEqual(app.selectbox(key="optimizer_method").value, MIN_VAR)
+            self.assertTrue(any(m.label == "Median ending value" for m in app.metric))
+            # The shared renderer receives the saved weights, and the detailed
+            # page has no second holdings picker that could diverge from them.
+            self.assertEqual(len(app.multiselect), 0)
+            allocation = app.dataframe[0].value
+            pd.testing.assert_series_equal(allocation["Current"],
+                                           pd.Series(weights, name="Current"))
+
+            app.switch_page("views/your_portfolio.py").run()
+            self.assertEqual(app.multiselect(key="consumer_edit_holdings").value, list(weights))
+            self.assertTrue(market.called)
+            self.assertTrue(all(call.args[0] == tuple(weights) for call in market.call_args_list))
 
 
 if __name__ == "__main__":

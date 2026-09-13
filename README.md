@@ -1,39 +1,24 @@
-# 🔬 Portfolio X-Ray
+# Portfolio X-Ray
 
-**You think you own 6 things. You own 1.2.**
+**Understand your investments and explore a clearer balance.**
 
-Pick your holdings from a searchable universe of 244 instruments across 20
-countries — stocks, bonds, funds, commodities — and this tells you what your
-broker never will:
-
-1. **How many independent bets you actually hold.** Six positions that all rise and
-   fall together are one bet wearing six hats.
-2. **Where your risk really sits**, as opposed to where your money sits. They are
-   rarely the same place.
-3. **What would have happened to you** in 2008, in March 2020, and through 2022 —
-   using real prices, not a questionnaire.
-4. **Which holdings are secretly the same bet**, clustered by correlation.
-5. **What you should add** to actually diversify — ranked, measured, not guessed.
-6. **Better weights for the same holdings** — searched, then tested on history
-   they were not fitted to, with the rebalancing trades priced.
-
-## The demo
-
-The default portfolio looks sensibly diversified: an S&P 500 fund, a Nasdaq fund, a
-tech fund, two big stocks and a bond fund.
-
-```
-6 positions  →  1.16 independent bets
-Global Financial Crisis:  -46.8%
-COVID crash:              -27.5%
-2022 rate shock:          -27.5%
-
-AGG (bonds) is 10% of the money and 0.1% of the risk.
-```
-
-Six holdings, one bet. That is the entire pitch.
+Portfolio X-Ray turns historical portfolio analysis into plain-language
+explanations. Its landing page automatically compares ways to divide money
+among your current holdings, shows possible outcomes and explains what the
+model would buy, sell or keep. Question marks explain the financial terms
+without requiring a maths background.
 
 ## Run it
+
+From the repository root on Windows:
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m streamlit run app.py
+```
+
+On macOS or Linux:
 
 ```bash
 python3 -m venv .venv
@@ -41,49 +26,127 @@ python3 -m venv .venv
 .venv/bin/streamlit run app.py
 ```
 
-Filter the universe by country, sector or asset class, then search it by ticker or
-company name. Start from a preset, weight equally or by hand. Prices are cached to
-`.cache/` on first fetch, so the demo survives bad wifi.
+Open the local URL printed by Streamlit, normally
+[http://localhost:8501](http://localhost:8501).
 
-To extend the instrument list, append to `universe.csv` and run:
+**Updating an existing checkout?** Run the install command again after pulling.
+The consumer interface requires **Streamlit 1.63 or newer** for its native
+question-mark help, navigation and controls.
 
-```bash
-.venv/bin/python validate_universe.py --prune
-```
+For a quick offline test, open **Your portfolio → Data options**, choose
+**Synthetic demo (offline)** and select **Save portfolio & see my plan**.
+The plan runs automatically using clearly labeled invented prices. If the first
+market download fails, **Explore offline example** provides the same fallback.
+
+For market data, choose **Yahoo Finance** and save your holdings, amounts or
+percentages, total value and currency. Prices are cached in `.cache/`. The
+latest shared data period appears with the results; the app does not use live
+broker positions or execute orders.
+
+## Start with your plan
+
+The first page starts with a labeled example portfolio. Choose **Edit
+portfolio** to enter your own, or explore the example first. Your saved inputs
+are shared across pages for the current Streamlit session.
+
+1. Choose a goal: **Balance growth & risk**, **A smoother ride**, or **Keep it
+   simple**. The app chooses the corresponding method and runs the analysis.
+2. Read the suggested balance and the difficult, middle and strong simulation
+   outcomes. These describe examples under the model's assumptions, not promised
+   future amounts.
+3. Review the **buy, sell & keep plan**. Every change stays within your existing
+   holdings. Estimated trading costs are funded from the portfolio, and each
+   holding has a reason for its proposed change.
+4. Explore **Diversify** at the bottom only if you want to research adding
+   something new. This search does not alter your saved holdings or plan.
+
+The trading rule checks portfolio weights at a chosen review interval. A target
+of 20% with a five-percentage-point band means the rule triggers below 15% or
+above 25%. It does not predict a perfect stock price or trading day. Real taxes,
+broker charges and trading restrictions are not individually calculated.
+
+## Pages
+
+| Page | What you can do |
+|---|---|
+| Your plan | Read the automatic recommendation, possible outcomes and explained trade amounts. The goal is the main analysis control. |
+| Your portfolio | Save 2–15 holdings, their relative amounts, portfolio value, currency and data source. Zero amounts are excluded. |
+| Portfolio details | Inspect current holdings' risk, country/sector exposure, linked movements and historical stress periods. |
+| Monte Carlo | Compare allocation methods, inspect the later-period check and scenarios, or change advanced assumptions. |
+| Diversify | Optionally compare adding a new investment at 10%, with the current mix scaled to 90%. |
+| Help me | Read the startup guide and search the plain-language glossary without loading market data. |
+
+Hover over a question mark or focus it with the keyboard for a short
+explanation. The glossary provides the same information in expandable text.
 
 ## How it works
 
-| Claim on screen | What computes it |
-|---|---|
-| Independent bets | Entropy of risk spread across the covariance matrix's principal components (Meucci). Ten clones score ~1; ten unrelated assets score ~10. |
-| Share of risk | Marginal contribution to risk, `w_i · (Σw)_i / σ_p`. Sums to 100%, so it sits next to the weight column and the gap is visible. |
-| "Explained by SPY" | R² of the portfolio's daily returns regressed on the benchmark. Above 90% means you are paying for stock picking and receiving the index. |
-| Crash replay | Peak-to-trough windows of real crises. Holdings that did not exist yet are dropped and the rest reweighted — `coverage` reports how much of the portfolio was actually around. |
-| Same-bet clusters | Single-linkage union-find over the correlation matrix. Five names above the threshold are one cluster, and one bet. |
-| Bad days (VaR / CVaR) | Historical percentiles of daily returns. CVaR is the average of the tail beyond VaR — the number that says how bad "bad" gets. |
-| One currency | Every holding is converted to one base currency using the listing currency in `universe.csv`, so a Swedish investor's dollar exposure counts as risk. FX series are checked for Yahoo's silent per-100-unit scale breaks first. |
-| Better weights | Dirichlet-sampled candidate portfolios projected onto a long-only weight cap, scored on shrinkage-adjusted moments, then refitted on the first 80% of history and tested on the last 20%. |
-| What to add | Each candidate is added at 10%, the portfolio scaled to make room, and effective bets recomputed on the history the two actually share, so a short track record cannot flatter a candidate. |
+The allocation search tries thousands of mixes of the same holdings and chooses
+the sampled mix with the best estimated return relative to price swings. It
+also compares minimum variance, inverse volatility and equal weights. Suggested
+weights sum to 100%, have no short positions, and respect the maximum holding
+size. These are model candidates, not proof of a globally optimal portfolio.
 
-No fitted models, no black box. Everything is numpy on a covariance matrix, in
-`xray.py`, and each function maps to exactly one claim the app makes.
+An 80/20 historical check chooses weights using the earlier period and tests
+them on the later period. Today's targets are then fitted on all available
+history, so they are not the exact targets tested earlier. Future scenarios
+reuse blocks of historical returns and include estimated trading costs and
+scheduled rebalancing. They can miss new events and relationships absent from
+that history. Simulated loss frequencies are not calibrated future odds.
+
+The current-portfolio detail charts keep today's weights fixed each day and do
+not deduct separate trading costs or taxes. Listing currencies and historical
+exchange rates put holdings into one base currency; the FX adapter validates
+rates and applies scale-break repair before conversion. Missing data fails
+visibly. See [OPTIMIZER.md](OPTIMIZER.md) for the complete assumptions and cost
+treatment.
 
 ## Layout
 
 ```
-app.py               Streamlit UI, six tabs — the only entry point
+app.py               thin entry point calling consumer_ui.render_app()
+consumer_ui.py       navigation, landing page, shared editor, diversification
+portfolio_service.py shared research run, goal mapping, trade reasons
+portfolio_details.py readable views of the existing risk analytics
+consumer_help.py     shared tooltips and searchable Help me docs
+consumer_style.css   consumer styling
+.streamlit/config.toml  theme defaults
+requirements.txt     runtime dependencies, including Streamlit 1.63+
+views/*.py           six thin st.navigation page entry points
 xray.py              core risk maths
 analysis.py          exposure, tail risk, clustering, diversifier scan
 data.py              price loading + on-disk cache
-universe.csv         244 instruments, 20 countries, 8 listing currencies
+universe.csv         instrument metadata, including listing currency
 optimizer.py         allocation search, holdout validation, scenarios (Codex)
-optimizer_ui.py      optimizer rendering, reused by app.py's Optimise tab (Codex)
+optimizer_ui.py      shared detailed renderers and standalone form (Codex)
 optimizer_market.py  currency conversion (Codex)
 optimizer_standalone.py  runs the optimizer UI on its own
 validate_universe.py checks every ticker still resolves
+test_consumer.py     automatic plan, shared profile and consumer journey checks
+test_optimizer*.py   optimizer, UI, explanation and FX adapter checks
 test_xray.py         sanity checks on synthetic data, no network needed
 COORDINATION.md      file ownership for working two agents in parallel
 ```
+
+`consumer_ui.py` registers the pages using `st.navigation`. Keep `app.py` thin;
+do not add a legacy `pages/` directory or duplicate the portfolio form on an
+analysis page. The form-based optimizer can also run independently with
+`streamlit run optimizer_standalone.py`; its inputs are separate from the main
+app and are useful for isolated development.
+
+Run checks on Windows:
+
+```powershell
+.\.venv\Scripts\python.exe -m unittest test_consumer test_optimizer test_optimizer_ui test_optimizer_clarity test_optimizer_market -v
+.\.venv\Scripts\python.exe test_xray.py
+```
+
+Before editing alongside another agent, read [COORDINATION.md](COORDINATION.md)
+for file ownership, stable interfaces and the shared Git workflow. Claude owns
+the thin `app.py` entry point and existing math/data modules; Codex owns the
+consumer presentation modules and optimizer. Append instrument metadata to
+`universe.csv` with its listing currency and run `validate_universe.py` before
+pushing additions.
 
 ## Things to extend
 

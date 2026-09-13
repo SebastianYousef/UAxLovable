@@ -1,53 +1,107 @@
-# Monte Carlo Optimizer — Codex handoff
+# Consumer portfolio app and Monte Carlo optimizer — Codex handoff
 
 ## Run
 
-Start the existing app as usual: `streamlit run app.py`. Streamlit automatically
-adds **Monte Carlo Optimizer** to its sidebar from
-`pages/1_Monte_Carlo_Optimizer.py`; there is no edit to `app.py`.
+Start the shared app with `streamlit run app.py`. Its **Your plan** landing page
+automatically analyzes the saved portfolio, runs future scenarios and explains
+conditional buy/sell/keep amounts. The initial portfolio is visibly labeled as
+an example. A goal selector is the main analysis control on the landing page;
+holdings and advanced assumptions have their own pages.
 
 On Windows, from the repository root:
 
 ```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m streamlit run app.py
 ```
 
-For a quick offline check choose **Synthetic demo (offline)** and **Run
-optimization**. The demo uses invented data and labels it on every results
-screen. For actual research choose **Yahoo Finance**, enter current position
-weights and portfolio value, and select the portfolio currency. New allocations
-are research outputs; nothing connects to a broker or executes orders.
+The consumer UI requires **Streamlit 1.63 or newer**. Reinstall requirements in
+an existing environment after pulling; the verified native help, navigation
+and controls use this version. Theme defaults are in `.streamlit/config.toml`.
+
+For an offline check, open **Your portfolio → Data options**, choose
+**Synthetic demo (offline)** and select **Save portfolio & see my plan**.
+Analysis runs automatically. If market loading fails first, **Explore offline
+example** provides the same fallback. Invented prices are labeled on result
+pages and are not suitable for deciding trades.
+
+For market research, save **Yahoo Finance** as the source and enter your current
+holdings, amounts or percentages, portfolio value and currency. The shared
+profile lasts for the Streamlit session; it is not a connected brokerage
+account or a permanent account record. No orders are submitted.
+
+The original form-based optimizer remains available for isolated development:
+
+```powershell
+.\.venv\Scripts\python.exe -m streamlit run optimizer_standalone.py
+```
+
+There, select **Synthetic demo (offline)** and **Run optimization**. Its form and
+saved results are independent of the main consumer app.
 
 ## File ownership and integration
 
 Following `COORDINATION.md`, Codex owns these newly created files:
 
 - `optimizer.py`: allocation math, holdout backtest, scenarios, rebalance amounts.
-- `optimizer_market.py`: currency verification and historical FX conversion,
-  calling Claude's existing `data.fetch_prices` without modifying it.
-- `optimizer_ui.py`: the new, separate screen.
-- `pages/1_Monte_Carlo_Optimizer.py`: Streamlit page entry point.
-- `test_optimizer.py`, `test_optimizer_ui.py`: offline regression tests.
+- `optimizer_market.py`: listing-currency lookup, FX validation and conversion,
+  using Claude's `data.fetch_prices` and `data.sanity_check_fx`.
+- `optimizer_ui.py`: reusable detailed optimizer renderers and standalone form.
+- `consumer_ui.py`: page registration, shared portfolio editor, automatic
+  landing page, optional diversification and detailed optimizer integration.
+- `portfolio_service.py`: goal mapping, one shared research run, trade reasons.
+- `portfolio_details.py`: readable views of the existing X-Ray analytics.
+- `consumer_help.py`, `consumer_style.css`: glossary, Help me and styling.
+- `.streamlit/config.toml`, `requirements.txt`: theme defaults and runtime
+  requirements for the consumer UI.
+- `views/*.py`: six thin page entry points; no legacy `pages/` routing.
+- `test_consumer.py`, `test_optimizer*.py`: offline regression checks.
 - `OPTIMIZER.md`: this handoff.
 
-Claude's `app.py`, `xray.py`, `analysis.py`, `data.py`, and existing tests are
-unchanged. No dependency changes were needed; all math uses numpy and pandas.
-This user-requested optimizer supersedes the older optional Codex task list
-(universe expansion, fees, API) for this turn.
+The user requested this routing migration: `app.py` now calls
+`consumer_ui.render_app()`. It remains Claude-owned for future changes and should
+stay thin. Claude's math/data modules (`xray.py`, `analysis.py`, `data.py`) retain
+their ownership and contracts. Coordinate future routing or consumer UI changes
+using `COORDINATION.md` rather than editing another agent's page module.
 
-If Claude later introduces `st.navigation` in the main app, explicitly register
-this page there: Streamlit ignores the `pages/` directory once `st.navigation`
-is used. Do not replace the optimizer files as part of that routing change.
+`st.navigation` explicitly registers **Your plan**, **Your portfolio**,
+**Portfolio details**, **Monte Carlo**, **Diversify** and **Help me**.
+`_consumer_profile` stores the single portfolio; `_consumer_goal` and
+`_consumer_settings` store its goal and assumptions. All consumer analysis pages
+read those values. **Help me** works without loading market data.
 
-Inputs use `optimizer_` widget keys and `_optimizer_` persistent result keys.
-Initial tickers are copied from X-Ray's `holdings` session key when present;
-weights are entered independently so a stale X-Ray editor cannot silently
-change the optimizer's baseline. The optimizer never writes X-Ray state.
+Keep these shared `optimizer_ui.py` interfaces stable:
+
+```python
+_allocation_tab(run) -> tuple[str, pd.Series]
+_validation_tab(run) -> None
+_scenarios_tab(run, method, target) -> None
+_trading_tab(run, method, target) -> None
+```
+
+`portfolio_service.build_research()` builds the consumer `run`. The standalone
+`optimizer_ui.render()` builds the compatible `_optimizer_run` dict. New required
+fields must be supplied by both builders. The shared renderers retain their
+`optimizer_` widget and `_optimizer_` result keys. Selecting another detailed
+method is an exploration; the landing page still follows its saved goal.
+
+The landing page only reweights existing positive holdings. **Diversify** is a
+separate, optional search that tests adding a candidate at 10% and scaling the
+current mix to 90%; it never edits the portfolio automatically. The main plan
+does not add a new ticker, assume extra cash, or allocate to cash outside the
+selected holdings. Native question-mark help uses the shared
+`consumer_help.help_text` and `section_heading` functions.
 
 ## Methods
 
 All target allocations are long-only, sum to one, and respect the selected
 per-holding cap. The current portfolio is an unconstrained comparison baseline.
+
+The landing goals map to methods as follows: **Balance growth & risk** uses
+Monte Carlo highest Sharpe, **A smoother ride** uses minimum variance, and
+**Keep it simple** uses equal weight. Inverse volatility is available in the
+detailed comparison. Goals select the objective, not whichever method happens
+to win the historical holdout.
 
 1. **Monte Carlo highest Sharpe:** sample a mixture of Dirichlet allocations,
    project onto the capped simplex, and choose the highest estimated Sharpe
@@ -76,9 +130,11 @@ the full shrunk covariance, including correlations.
   drifting holdings and fee-funded rebalancing, not a cost-free daily constant
   weight portfolio. They reuse raw historical returns, not shrunk means.
 - All comparisons use complete common returns from adjusted prices converted to
-  the portfolio currency using historical FX. Listing currency comes from Yahoo
-  metadata, not issuer country. Pence quotations are converted into pounds
-  before FX. Missing currencies or FX fail visibly; no implicit 1:1 rates.
+  the portfolio currency using historical FX. Listing currency comes from
+  `universe.csv`, with a Yahoo metadata fallback for unknown listings, never
+  issuer country. Pence quotations are converted into pounds before FX. Raw FX
+  rates are validated and scale breaks checked before conversion. Missing
+  currencies or FX fail visibly; no implicit 1:1 rates.
 - Price and FX observations use the existing disk cache; the latest common date
   is displayed and observations older than 10 days are flagged. Market holidays
   may have been forward-filled by `data.py`. Annualization uses 252 observations
@@ -99,19 +155,35 @@ valuation behind the input weights, not fair values, live quotes, executable
 orders or market-timing predictions. Tax lots, actual spreads, minimum orders,
 contributions, inflation, and separate fund fees are outside the model.
 
+The landing page states that scenarios assume adopting the target first, even
+when the conditional plan currently says to hold. A holding can require no
+material trade while others rebalance, and a small sale can fund costs even
+when its target percentage is unchanged. Card amounts are rounded for reading;
+the downloaded plan retains the underlying values and reasons. Historical
+Portfolio details charts use fixed daily weights and do not deduct the separate
+trading-cost assumption; their assumptions differ from the optimizer's drifting
+weights and scheduled reviews.
+
 ## Verification
 
 ```powershell
-.\.venv\Scripts\python.exe -m unittest test_optimizer test_optimizer_ui -v
+.\.venv\Scripts\python.exe -m unittest test_consumer test_optimizer test_optimizer_ui test_optimizer_clarity test_optimizer_market -v
 .\.venv\Scripts\python.exe test_xray.py
 ```
 
 Numerical checks include analytical minimum-variance solutions, cap feasibility,
 reproducible sampling, preserved cross-asset dependence, no future data in
 training weights, fee-funded trades, first-day drawdowns, missing data, and FX
-conversion without look-ahead. UI checks cover navigation from the existing
-app, offline allocation and scenarios, changing targets, invalid inputs and
-network failure.
+conversion without look-ahead. Consumer checks cover automatic landing results,
+saved holdings across pages, current-holdings-only plans, funded trades and data
+failure without stale recommendations. Standalone checks cover offline
+allocation and scenarios, changing targets, invalid inputs and network failure.
+
+Consumer migration verification on 13 September 2026: 42 discovered unit tests
+passed, as did the separate `test_xray.py` checks, Python compilation and
+`pip check`. Browser checks covered automatic market-data results, question-mark
+help, changing goals, saved portfolio value across pages, glossary search and
+a 390-pixel-wide layout without horizontal overflow.
 
 ## References
 
