@@ -17,6 +17,29 @@ p, li { line-height: 1.6; }
 .brand-mark { font-size: 1.2rem; font-weight: 750; letter-spacing: -0.03em; color: var(--brand); padding: 0 0 .3rem; }
 .brand-mark span { display: inline-flex; align-items: center; justify-content: center; width: 34px; height: 34px; margin-right: 7px; background: var(--brand); color: white; border-radius: 10px; }
 .brand-note { font-size: .86rem; color: var(--muted); }
+.team-links { margin-top: 1.25rem; }
+.team-label {
+  margin: 0 0 .5rem; color: var(--muted); font-size: .78rem;
+  font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+}
+.linkedin-profile {
+  display: flex; align-items: center; gap: .65rem; margin: .45rem 0;
+  padding: .6rem .7rem; color: var(--ink) !important; text-decoration: none !important;
+  background: rgba(255, 255, 255, .65); border: 1px solid var(--line);
+  border-radius: 12px; transition: background-color .15s ease, border-color .15s ease, transform .15s ease;
+}
+.linkedin-profile:hover {
+  background: #fff; border-color: #9bb6a7; transform: translateY(-1px);
+}
+.linkedin-mark {
+  display: inline-flex; align-items: center; justify-content: center; flex: 0 0 30px;
+  width: 30px; height: 30px; padding-top: 3px; border-radius: 7px;
+  background: #0a66c2; color: #fff; font-family: Arial, sans-serif;
+  font-size: 1.05rem; font-weight: 800; line-height: 1;
+}
+.linkedin-person { display: flex; min-width: 0; flex-direction: column; line-height: 1.2; }
+.linkedin-person strong { overflow: hidden; font-size: .86rem; text-overflow: ellipsis; white-space: nowrap; }
+.linkedin-person small { color: var(--muted); font-size: .73rem; }
 .eyebrow { color: var(--brand); font-size: .72rem; letter-spacing: .16em; font-weight: 750; margin-bottom: .8rem; }
 [data-testid="stVerticalBlockBorderWrapper"] > div { border-radius: var(--radius); }
 [data-testid="stVerticalBlockBorderWrapper"] { background: var(--surface); border-radius: var(--radius); }

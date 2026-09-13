@@ -24,6 +24,10 @@ PAGE_PATHS = {
 }
 DIVERSIFIERS = ["AGG", "TLT", "SHY", "TIP", "LQD", "HYG", "GLD", "VNQ", "VWO", "VEA", "EFA", "USMV", "XLU", "XLP"]
 CURRENCIES = ["USD", "SEK", "EUR", "GBP", "CAD", "AUD"]
+LINKEDIN_PROFILES = (
+    ("Ali Saleh", "https://www.linkedin.com/in/ali-saleh2004"),
+    ("Sebastian Yousef", "https://www.linkedin.com/in/sebastian-yousef"),
+)
 
 
 @st.cache_data
@@ -97,6 +101,22 @@ def _theme():
     st.html((ROOT / "consumer_style.css").read_text(encoding="utf-8"))
 
 
+def _team_links():
+    """Show the two project creators as compact, accessible LinkedIn links."""
+    links = "".join(
+        f'''<a class="linkedin-profile" href="{escape(url)}" target="_blank"
+                rel="noopener noreferrer" aria-label="Open {escape(name)} on LinkedIn">
+                <span class="linkedin-mark" aria-hidden="true">in</span>
+                <span class="linkedin-person"><strong>{escape(name)}</strong><small>LinkedIn</small></span>
+            </a>'''
+        for name, url in LINKEDIN_PROFILES
+    )
+    st.sidebar.markdown(
+        f'<div class="team-links"><p class="team-label">Meet the creators</p>{links}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_app():
     st.set_page_config(page_title="Portfolio X-Ray · Your plan", page_icon="🌿", layout="wide")
     _theme()
@@ -115,6 +135,7 @@ def render_app():
     st.sidebar.divider()
     st.sidebar.caption("A little help, wherever you need it")
     st.sidebar.markdown("Hover or focus a **?** beside a term for a plain-language explanation. Find the full guide in **Help me**.")
+    _team_links()
     selected.run()
 
 

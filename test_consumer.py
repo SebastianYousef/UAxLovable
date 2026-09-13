@@ -46,6 +46,11 @@ class ConsumerJourneyTests(unittest.TestCase):
         self.assertTrue(all(item.proto.help for item in app.metric))
         additions = next(m for m in app.metric if m.label == "Investments to add money to")
         self.assertRegex(additions.value, r"^[1-9]\d* held now$")
+        sidebar_markup = "\n".join(item.value for item in app.sidebar.markdown)
+        self.assertIn("Ali Saleh", sidebar_markup)
+        self.assertIn("linkedin.com/in/ali-saleh2004", sidebar_markup)
+        self.assertIn("Sebastian Yousef", sidebar_markup)
+        self.assertIn("linkedin.com/in/sebastian-yousef", sidebar_markup)
 
     def test_currency_change_updates_every_analysis_page_immediately(self):
         app = app_fixture()
