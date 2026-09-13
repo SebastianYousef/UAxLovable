@@ -23,6 +23,7 @@ PAGE_PATHS = {
     "diversify": "views/diversify.py", "help": "views/help_me.py",
 }
 DIVERSIFIERS = ["AGG", "TLT", "SHY", "TIP", "LQD", "HYG", "GLD", "VNQ", "VWO", "VEA", "EFA", "USMV", "XLU", "XLP"]
+CURRENCIES = ["USD", "SEK", "EUR", "GBP", "CAD", "AUD"]
 
 
 @st.cache_data
@@ -66,6 +67,22 @@ def _save_goal():
     st.session_state["_consumer_goal"] = st.session_state["consumer_goal"]
 
 
+def _save_currency():
+    """Apply a currency change immediately and discard results in the old unit."""
+    saved = profile()
+    base = st.session_state["consumer_base"]
+    if saved["base"] == base:
+        return
+    saved["base"] = base
+    # These objects contain values expressed in the previous currency. The
+    # research and market caches already include base in their cache keys.
+    st.session_state.pop("_optimizer_scenario", None)
+    st.session_state.pop("_consumer_diversify", None)
+    st.session_state["_consumer_currency_notice"] = (
+        f"Currency updated to {base} across the app. The portfolio value stays "
+        "the same number until you edit it below.")
+
+
 def _fit_cap_to_holdings(count):
     settings = st.session_state["_consumer_settings"].copy()
     if settings["cap"] * count < 1:
@@ -83,8 +100,9 @@ def _theme():
 def render_app():
     st.set_page_config(page_title="Portfolio X-Ray · Your plan", page_icon="🌿", layout="wide")
     _theme()
-    profile()
+    saved = profile()
     st.sidebar.markdown('<div class="brand-mark"><span>↗</span> Portfolio X-Ray</div><p class="brand-note">Make sense of your investments.</p>', unsafe_allow_html=True)
+    st.sidebar.caption(f"Plan currency · {saved['base']}")
     pages = [
         st.Page(PAGE_PATHS["home"], title="Your plan", icon=":material/auto_awesome:", default=True),
         st.Page(PAGE_PATHS["portfolio"], title="Your portfolio", icon=":material/account_balance_wallet:"),
@@ -192,7 +210,9 @@ def render_home():
             st.write("Your current mix is within the review band. There is no suggested trade now; check again at your next review.")
         left, middle, right = st.columns(3)
         left.metric("Price swings", f"{abs(reduction):.0%} {'smaller' if reduction >= 0 else 'larger'}", help=help_text("volatility"))
-        middle.metric("New investments needed", "None", help="This plan only changes the proportions of the investments you already hold. Diversification is a separate, optional step at the bottom.")
+        buys = int((run["plan"]["Action"] == "Buy").sum()) if changed else 0
+        middle.metric("Investments to add money to", f"{buys} held now" if buys else "None now",
+                      help="This live count shows how many investments you already own have a suggested purchase. The main plan never adds a new holding. New holdings are explored separately under Diversify.")
         right.metric("When to review", run["review"], help=help_text("review"))
         st.caption("Price swings compare estimated annual volatility of the current and suggested mix. Smaller swings can mean lower potential returns; this is not a measure of every kind of risk.")
 
@@ -413,11 +433,16 @@ def render_portfolio():
         else:
             amounts = _split_table(selected, saved)
 
+    st.session_state.setdefault("consumer_base", saved["base"])
+    st.selectbox("Currency used across the app", CURRENCIES, key="consumer_base",
+                 on_change=_save_currency, help=help_text("currency"))
+    st.caption("Changing this updates currency conversion and labels on every analysis page immediately. "
+               "It does not convert the portfolio-value number for you.")
+    if st.session_state.get("_consumer_currency_notice"):
+        st.success(st.session_state.pop("_consumer_currency_notice"))
+
     with st.form("consumer_portfolio_form"):
-        a, b = st.columns(2)
-        value = a.number_input("How much is your portfolio worth?", 100.0, 1e10, float(saved["value"]), 1000.0, help=help_text("current_value"))
-        options = ["USD", "SEK", "EUR", "GBP", "CAD", "AUD"]
-        base = b.selectbox("Your currency", options, index=options.index(saved["base"]), help=help_text("currency"))
+        value = st.number_input("How much is your portfolio worth?", 100.0, 1e10, float(saved["value"]), 1000.0, help=help_text("current_value"))
         own = st.checkbox("These are my holdings (remove the example label)", value=not saved["is_example"])
         with st.expander("Data options"):
             source = st.selectbox("Price data", ["Yahoo Finance", "Synthetic demo (offline)"],
@@ -431,7 +456,8 @@ def render_portfolio():
         except ValueError as exc:
             st.error(str(exc))
         else:
-            st.session_state["_consumer_profile"] = dict(weights=weights.to_dict(), value=value, base=base,
+            st.session_state["_consumer_profile"] = dict(weights=weights.to_dict(), value=value,
+                base=st.session_state["consumer_base"],
                 source=source, start=start, is_example=not own or source != "Yahoo Finance")
             _fit_cap_to_holdings(len(weights))
             _go("home")

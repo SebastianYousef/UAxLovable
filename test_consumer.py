@@ -44,6 +44,30 @@ class ConsumerJourneyTests(unittest.TestCase):
         self.assertFalse(any("Run" in item.label for item in app.button))
         self.assertTrue(any("Offline example" in item.value for item in app.warning))
         self.assertTrue(all(item.proto.help for item in app.metric))
+        additions = next(m for m in app.metric if m.label == "Investments to add money to")
+        self.assertRegex(additions.value, r"^[1-9]\d* held now$")
+
+    def test_currency_change_updates_every_analysis_page_immediately(self):
+        app = app_fixture()
+        app.switch_page("views/your_portfolio.py").run()
+        app.selectbox(key="consumer_base").set_value("SEK").run()
+        self.assertFalse(app.exception, [e.message for e in app.exception])
+        self.assertEqual(app.session_state["_consumer_profile"]["base"], "SEK")
+        self.assertTrue(any("Currency updated to SEK across the app" in item.value
+                            for item in app.success))
+
+        app.switch_page("views/your_plan.py").run()
+        middle = next(m for m in app.metric if m.label == "The middle outcome")
+        self.assertTrue(middle.value.endswith(" SEK"), middle.value)
+        self.assertTrue(any("Values in SEK" in item.value for item in app.caption))
+
+        app.switch_page("views/monte_carlo.py").run()
+        ending = next(m for m in app.metric if m.label == "Median ending value")
+        self.assertTrue(ending.value.endswith(" SEK"), ending.value)
+        self.assertTrue(any("Values in SEK" in item.value for item in app.caption))
+
+        app.switch_page("views/portfolio_details.py").run()
+        self.assertTrue(any("Measured in SEK" in item.value for item in app.caption))
 
     def test_portfolio_edit_saves_across_pages(self):
         app = app_fixture()
