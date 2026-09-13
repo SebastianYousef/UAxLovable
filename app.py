@@ -8,7 +8,10 @@ import streamlit as st
 from analysis import (correlation_clusters, diversifier_scan,
                       equal_weight_comparison, exposure_breakdown,
                       rolling_risk, tail_risk, top_holdings_share)
-from data import fetch_prices
+from data import fetch_prices, sanity_check_fx
+from optimizer import aligned_returns, holdout_validation, optimize
+from optimizer_ui import (REVIEWS, _allocation_tab, _scenarios_tab,
+                          _trading_tab, _validation_tab)
 from xray import (annualised_return, annualised_vol, average_correlation,
                   benchmark_fit, daily_returns, effective_bets,
                   effective_positions, max_drawdown, normalise_weights,
@@ -44,6 +47,29 @@ def load_universe() -> pd.DataFrame:
 @st.cache_data(show_spinner="Fetching prices…")
 def load_prices(tickers: tuple[str, ...], start: str) -> pd.DataFrame:
     return fetch_prices(tickers, start)
+
+
+@st.cache_data(show_spinner="Fetching prices and exchange rates…")
+def load_in_currency(tickers: tuple[str, ...], start: str, base: str,
+                     currencies: tuple[tuple[str, str], ...]) -> pd.DataFrame:
+    """Prices converted to one currency, so cross-country risk is real risk.
+
+    A Swedish investor holding US stocks carries the dollar as well as the
+    stock; comparing raw local-currency series silently ignores that. Listing
+    currencies come from universe.csv rather than a per-ticker lookup, so this
+    costs one download per FX pair instead of one per holding.
+    """
+    from optimizer_market import convert_to_base
+
+    currencies = dict(currencies)
+    prices = fetch_prices(tickers, start).reindex(columns=list(tickers))
+
+    major = {"GBp": "GBP", "GBX": "GBP"}
+    pairs = tuple(sorted({f"{major.get(c, c)}{base}=X" for c in currencies.values()
+                          if major.get(c, c) != base}))
+    fx = sanity_check_fx(fetch_prices(pairs, start)) if pairs else pd.DataFrame()
+
+    return convert_to_base(prices, currencies, fx, base)
 
 
 universe = load_universe()
@@ -127,14 +153,32 @@ start_date = st.sidebar.selectbox(
     "History from", ["2005-01-01", "2010-01-01", "2015-01-01", "2020-01-01"],
     index=0,
 )
+base_currency = st.sidebar.selectbox("Value everything in",
+                                     ["USD", "SEK", "EUR", "GBP"], index=0)
 
 # -------------------------------------------------------------------- data
 
+# dict.fromkeys dedupes while keeping order: the benchmark is often also a
+# holding, and a repeated ticker would produce duplicate price columns.
+tickers = tuple(dict.fromkeys(tuple(weights.index) + (benchmark_ticker,)))
+currency_warning = None
+listing_currency = dict(zip(universe["ticker"], universe["currency"]))
+currencies = {t: listing_currency.get(t) for t in tickers}
+
 try:
-    prices = load_prices(tuple(weights.index) + (benchmark_ticker,), start_date)
-except Exception as exc:  # noqa: BLE001 -- surface the real reason to the user
-    st.error(f"Could not load prices: {exc}")
-    st.stop()
+    prices = load_in_currency(tickers, start_date, base_currency,
+                              tuple(sorted(currencies.items())))
+except Exception as exc:  # noqa: BLE001 -- fall back rather than lose the demo
+    try:
+        prices = load_prices(tickers, start_date)
+    except Exception as inner:  # noqa: BLE001 -- surface the real reason
+        st.error(f"Could not load prices: {inner}")
+        st.stop()
+    currency_warning = (
+        f"Could not convert to {base_currency} ({exc}). Showing each holding "
+        "in its own listing currency, so cross-country numbers ignore "
+        "exchange-rate moves."
+    )
 
 returns = daily_returns(prices)
 holdings_returns = returns[list(weights.index)].dropna(how="all")
@@ -145,6 +189,9 @@ contributions = risk_contributions(holdings_returns, weights)
 # ---------------------------------------------------------------- headline
 
 st.title("🔬 Portfolio X-Ray")
+
+if currency_warning:
+    st.warning(currency_warning)
 
 n_bets = effective_bets(holdings_returns, weights)
 st.subheader(
@@ -173,8 +220,8 @@ if fit["r2"] > 0.9:
         "receiving the index."
     )
 
-overview, exposure, risk, stress, additions = st.tabs(
-    ["Overview", "Exposure", "Risk", "Stress tests", "What to add"]
+overview, exposure, risk, stress, additions, optimise = st.tabs(
+    ["Overview", "Exposure", "Risk", "Stress tests", "What to add", "Optimise"]
 )
 
 # ---------------------------------------------------------------- overview
@@ -414,3 +461,110 @@ with additions:
                     f"{scan.loc[best, 'bets_gained']:+.2f} bets, with a "
                     f"{scan.loc[best, 'vol_change']:+.1%} change in volatility."
                 )
+
+# ---------------------------------------------------------------- optimise
+
+with optimise:
+    st.subheader("Keep these holdings. Find better weights.")
+    st.caption(
+        "The tabs so far diagnose the portfolio you have. This one searches "
+        "for weightings of the *same* holdings that carry less risk for the "
+        "return — then checks the answer on history it was not fitted to. "
+        "'Best' means best under one objective and past data, not a promise."
+    )
+
+    if len(weights) > 15:
+        st.info(
+            f"{len(weights)} holdings selected. The search still runs, but it "
+            "is slower and the estimates get noisier the more holdings you add."
+        )
+
+    with st.form("xray_optimiser"):
+        row = st.columns(4)
+        value = row[0].number_input(f"Portfolio value ({base_currency})",
+                                    min_value=100.0, max_value=1e10,
+                                    value=100_000.0, step=1000.0)
+        cap_percent = row[1].slider("Max weight per holding (%)", 5, 100, 50, 5)
+        samples = row[2].select_slider("Portfolios to search",
+                                       [2000, 5000, 10000, 25000, 50000],
+                                       value=10000)
+        risk_free = row[3].number_input("Risk-free rate (% / year)",
+                                        min_value=-5.0, max_value=25.0,
+                                        value=3.0, step=0.25)
+
+        with st.expander("Estimation and trading assumptions"):
+            fine = st.columns(3)
+            mean_shrink = fine[0].slider(
+                "Return shrinkage (%)", 0, 100, 50, 10,
+                help="Pull each historical mean toward the average. Historical "
+                     "means are a famously bad forecast, so shrinking them hard "
+                     "is the honest default.")
+            covariance_shrink = fine[1].slider("Covariance shrinkage (%)", 0, 100, 10, 5)
+            seed = fine[2].number_input("Random seed", 0, 2147483647, 42, 1)
+
+            trade = st.columns(4)
+            review = trade[0].selectbox("Review schedule", list(REVIEWS), index=1)
+            band = trade[1].slider("Rebalance band (points)", 1, 20, 5)
+            costs = trade[2].number_input("Trading cost (bps)", 0.0, 1000.0, 10.0, 5.0)
+            block_days = trade[3].selectbox("Scenario block (days)", [5, 21, 63], index=1)
+
+        submitted = st.form_submit_button("Run optimisation", type="primary")
+
+    if submitted:
+        st.session_state.pop("_optimizer_run", None)
+        st.session_state.pop("_optimizer_scenario", None)
+        try:
+            if len(weights) * cap_percent < 100:
+                raise ValueError(
+                    f"The cap is infeasible: {len(weights)} × {cap_percent}% is "
+                    f"below 100%. Raise it to at least {100 / len(weights):.1f}%."
+                )
+            with st.spinner("Searching allocations and testing them out of sample…"):
+                optimiser_returns = aligned_returns(prices[list(weights.index)])
+                current = normalise_weights(
+                    weights.reindex(optimiser_returns.columns))
+                params = dict(samples=int(samples), cap=cap_percent / 100,
+                              risk_free=risk_free / 100, seed=int(seed),
+                              mean_shrinkage=mean_shrink / 100,
+                              covariance_shrinkage=covariance_shrink / 100)
+                st.session_state["_optimizer_run"] = dict(
+                    id=pd.Timestamp.now().isoformat(),
+                    result=optimize(optimiser_returns, current, **params),
+                    validation=holdout_validation(
+                        optimiser_returns, current, **params, cost_bps=costs,
+                        band=band / 100, review_days=REVIEWS[review]),
+                    returns=optimiser_returns, current=current, value=value,
+                    base=base_currency, source="Yahoo Finance", start=start_date,
+                    currencies=currencies, review=review, band=band / 100,
+                    cost_bps=costs, block_days=block_days, **params)
+        except Exception as exc:  # noqa: BLE001 -- show the real constraint
+            st.error(f"Optimisation could not run: {exc}")
+
+    run = st.session_state.get("_optimizer_run")
+
+    if not run:
+        st.info("Set your assumptions above, then run the optimisation.")
+    elif list(run["current"].index) != list(weights.index):
+        st.info(
+            "Your holdings changed since the last run. Run the optimisation "
+            "again to refresh these results."
+        )
+    else:
+        dates = run["returns"].index
+        st.caption(
+            f"{len(dates):,} shared daily returns · {dates[0]:%d %b %Y} – "
+            f"{dates[-1]:%d %b %Y} · {run['base']} · {run['cap']:.0%} holding "
+            f"cap · seed {run['seed']}."
+        )
+        allocation, validation, scenarios, trading = st.tabs(
+            ["Allocation", "Out-of-sample check", "Future scenarios",
+             "When to trade"]
+        )
+        with allocation:
+            method, target = _allocation_tab(run)
+        with validation:
+            _validation_tab(run)
+        with scenarios:
+            _scenarios_tab(run, method, target)
+        with trading:
+            _trading_tab(run, method, target)

@@ -53,6 +53,7 @@ def main():
     assert len(portfolio_series(returns, weights)) == len(returns)
 
     test_analysis_layer()
+    test_fx_repair()
 
     print(f"all checks passed  (4 positions -> {bets:.2f} effective bets)")
 
@@ -102,6 +103,43 @@ def test_analysis_layer():
     assert not scan.empty and scan.loc["D", "bets_gained"] > 0, (
         "adding an uncorrelated asset must increase effective bets"
     )
+
+
+def test_fx_repair():
+    """Checks for the FX scale-break repair in data.py."""
+    from data import repair_scale_breaks, sanity_check_fx
+
+    dates = pd.bdate_range("2015-01-01", periods=300)
+    rng = np.random.default_rng(7)
+    honest = pd.Series(0.078 * np.cumprod(1 + rng.normal(0, 0.004, 300)), index=dates)
+
+    assert (repair_scale_breaks(honest) - honest).abs().max() < 1e-12, (
+        "a clean series must pass through untouched"
+    )
+
+    # The real JPYSEK=X failure: a stretch quoted per 100 units.
+    broken = honest.copy()
+    broken.iloc[100:160] *= 100
+    repaired = repair_scale_breaks(broken)
+    assert (repaired - honest).abs().max() < 1e-12, "the 100x stretch should be undone"
+
+    # Breaks in both directions, and a series whose bad stretch is at the end.
+    tail_break = honest.copy()
+    tail_break.iloc[200:] /= 100
+    assert (repair_scale_breaks(tail_break) - honest).abs().max() < 1e-12
+
+    frame = pd.DataFrame({"GOODSEK=X": honest, "JPYSEK=X": broken})
+    checked = sanity_check_fx(frame)
+    assert checked["JPYSEK=X"].pct_change().abs().max() < 0.25
+
+    wild = pd.DataFrame({"BADSEK=X": pd.Series([1.0, 1.6, 1.0, 1.7, 1.0] * 20,
+                                               index=dates[:100])})
+    try:
+        sanity_check_fx(wild)
+    except ValueError as exc:
+        assert "Implausible" in str(exc)
+    else:
+        raise AssertionError("an implausible FX series must be rejected")
 
 
 if __name__ == "__main__":

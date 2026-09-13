@@ -14,6 +14,8 @@ broker never will:
    using real prices, not a questionnaire.
 4. **Which holdings are secretly the same bet**, clustered by correlation.
 5. **What you should add** to actually diversify — ranked, measured, not guessed.
+6. **Better weights for the same holdings** — searched, then tested on history
+   they were not fitted to, with the rebalancing trades priced.
 
 ## The demo
 
@@ -59,6 +61,8 @@ To extend the instrument list, append to `universe.csv` and run:
 | Crash replay | Peak-to-trough windows of real crises. Holdings that did not exist yet are dropped and the rest reweighted — `coverage` reports how much of the portfolio was actually around. |
 | Same-bet clusters | Single-linkage union-find over the correlation matrix. Five names above the threshold are one cluster, and one bet. |
 | Bad days (VaR / CVaR) | Historical percentiles of daily returns. CVaR is the average of the tail beyond VaR — the number that says how bad "bad" gets. |
+| One currency | Every holding is converted to one base currency using the listing currency in `universe.csv`, so a Swedish investor's dollar exposure counts as risk. FX series are checked for Yahoo's silent per-100-unit scale breaks first. |
+| Better weights | Dirichlet-sampled candidate portfolios projected onto a long-only weight cap, scored on shrinkage-adjusted moments, then refitted on the first 80% of history and tested on the last 20%. |
 | What to add | Each candidate is added at 10%, the portfolio scaled to make room, and effective bets recomputed on the history the two actually share, so a short track record cannot flatter a candidate. |
 
 No fitted models, no black box. Everything is numpy on a covariance matrix, in
@@ -67,11 +71,15 @@ No fitted models, no black box. Everything is numpy on a covariance matrix, in
 ## Layout
 
 ```
-app.py               Streamlit UI, five tabs
+app.py               Streamlit UI, six tabs — the only entry point
 xray.py              core risk maths
 analysis.py          exposure, tail risk, clustering, diversifier scan
 data.py              price loading + on-disk cache
-universe.csv         244 instruments, 20 countries
+universe.csv         244 instruments, 20 countries, 8 listing currencies
+optimizer.py         allocation search, holdout validation, scenarios (Codex)
+optimizer_ui.py      optimizer rendering, reused by app.py's Optimise tab (Codex)
+optimizer_market.py  currency conversion (Codex)
+optimizer_standalone.py  runs the optimizer UI on its own
 validate_universe.py checks every ticker still resolves
 test_xray.py         sanity checks on synthetic data, no network needed
 COORDINATION.md      file ownership for working two agents in parallel

@@ -10,7 +10,7 @@ from streamlit.testing.v1 import AppTest
 from optimizer import MIN_VAR
 
 ROOT = Path(__file__).parent
-PAGE = ROOT / "pages" / "1_Monte_Carlo_Optimizer.py"
+PAGE = ROOT / "optimizer_standalone.py"
 
 
 def button(app, label):
@@ -50,7 +50,7 @@ class OptimizerUITests(unittest.TestCase):
         self.assertTrue(any("Provider unavailable" in e.value for e in app.error))
         self.assertEqual(len(app.tabs), 0)
 
-    def test_navigation_from_existing_xray(self):
+    def test_xray_app_exposes_the_merged_optimiser(self):
         def prices(tickers, start):
             rng = np.random.default_rng(4)
             tickers = list(dict.fromkeys(tickers))
@@ -60,12 +60,13 @@ class OptimizerUITests(unittest.TestCase):
             return pd.DataFrame(100 * np.cumprod(1 + values, axis=0), index=dates, columns=tickers)
 
         with patch("data.fetch_prices", side_effect=prices):
-            app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=30).run()
-            self.assertFalse(app.exception, [e.message for e in app.exception])
-            app.switch_page("pages/1_Monte_Carlo_Optimizer.py").run()
+            app = AppTest.from_file(str(ROOT / "app.py"), default_timeout=60).run()
         self.assertFalse(app.exception, [e.message for e in app.exception])
-        self.assertEqual(app.title[0].value, "🎲 Monte Carlo Optimizer")
-        self.assertEqual(app.multiselect(key="optimizer_holdings").value,
+        self.assertEqual(app.title[0].value, "🔬 Portfolio X-Ray")
+        # The optimizer is a tab of the X-Ray app, driven by the holdings
+        # already chosen in its sidebar -- there is no second picker.
+        self.assertIn("Optimise", [tab.label for tab in app.tabs])
+        self.assertEqual(app.multiselect(key="holdings").value,
                          ["SPY", "QQQ", "VGT", "AAPL", "MSFT", "AGG"])
 
 
