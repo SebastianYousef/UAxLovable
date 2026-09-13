@@ -10,6 +10,8 @@ import numpy as np
 import pandas as pd
 from streamlit.testing.v1 import AppTest
 
+from portfolio_service import PRESETS
+
 ROOT = Path(__file__).parent
 
 
@@ -71,6 +73,34 @@ class WeightSplitTests(unittest.TestCase):
         ordered_after = sorted(after, key=after.get)
         self.assertEqual(ordered_before, ordered_after)
         self.assertEqual(sum(after.values()), 50)
+
+    def test_split_survives_a_trip_to_another_page(self):
+        app = portfolio_page()
+        before = slider_total(app)
+        self.assertEqual(before, 100)
+
+        with patch("data.fetch_prices", side_effect=fake_prices):
+            app.switch_page("views/your_plan.py").run()
+            app.switch_page("views/your_portfolio.py").run()
+        self.assertFalse(app.exception, [e.message for e in app.exception])
+        self.assertEqual(slider_total(app), 100, "the split reset on the way back")
+
+    def test_choosing_an_example_saves_it(self):
+        app = portfolio_page()
+        example = next(s for s in app.selectbox if s.label == "Example portfolio")
+        target = "Magnificent Seven example"
+
+        with patch("data.fetch_prices", side_effect=fake_prices):
+            example.set_value(target).run()
+            next(b for b in app.button if b.label == "Use this example").click().run()
+        self.assertEqual(slider_total(app), 100)
+
+        with patch("data.fetch_prices", side_effect=fake_prices):
+            next(b for b in app.button
+                 if b.label == "Save portfolio & see my plan").click().run()
+        self.assertFalse(app.error, [e.value for e in app.error])
+        self.assertEqual(list(app.session_state["_consumer_profile"]["weights"]),
+                         PRESETS[target])
 
     def test_typed_amounts_still_work(self):
         app = portfolio_page()

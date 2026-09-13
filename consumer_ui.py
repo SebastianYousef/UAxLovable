@@ -357,7 +357,10 @@ def _rebalance_split(moved: str, tickers: list) -> None:
 def _sync_split(selected: list, saved: dict) -> None:
     """Seed the sliders, keeping what the user already set for kept holdings."""
     previous = st.session_state.get("consumer_split_tickers")
-    if previous == selected:
+    # Streamlit drops slider state while another page is showing, so the list of
+    # tickers matching is not enough: without the positions themselves the
+    # sliders would come back at 0% and the saved split would be lost.
+    if previous == selected and all(_split_key(t) in st.session_state for t in selected):
         return
 
     base = {}
